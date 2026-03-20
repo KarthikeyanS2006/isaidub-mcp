@@ -148,8 +148,8 @@ async function getFinalLinks(dubmvUrl) {
 
 // ISAIDUB API - Tamil Dubbed Movies
 app.get('/api/isaidub/movies', async (req, res) => {
-  const { url } = req.query;
-  const targetUrl = url || `${SOURCES.isaidub}/tamil-2026-dubbed-movies/`;
+  const { category = '2026' } = req.query;
+  const targetUrl = `${SOURCES.isaidub}/tamil-${category}-dubbed-movies/`;
   
   try {
     const response = await axios.get(targetUrl, axiosConfig);
@@ -374,8 +374,8 @@ app.get('/api/isaidub/details', async (req, res) => {
 
 // MOVIESDA API - Tamil Movies
 app.get('/api/moviesda/movies', async (req, res) => {
-  const { url } = req.query;
-  const targetUrl = url || `${SOURCES.moviesda}/tamil-2026-movies/`;
+  const { category = '2026' } = req.query;
+  const targetUrl = `${SOURCES.moviesda}/tamil-${category}-movies/`;
   
   try {
     const { data } = await axios.get(targetUrl, axiosConfig);

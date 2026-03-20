@@ -46,7 +46,7 @@ async function fetchMovies() {
     movieGrid.innerHTML = '';
     
     try {
-        const url = `${API_BASE}/api/${currentSource}/movies?url=${encodeURIComponent(categoryUrls[currentSource][currentCategory])}`;
+        const url = `${API_BASE}/api/${currentSource}/movies?category=${currentCategory}`;
         console.log('Fetching:', url);
         const response = await fetch(url);
         console.log('Response status:', response.status);

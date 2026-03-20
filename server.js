@@ -13,9 +13,11 @@ const SOURCES = {
 };
 
 const axiosConfig = {
-  timeout: 15000,
+  timeout: 30000,
   headers: {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
   }
 };
 
@@ -161,19 +163,18 @@ app.get('/api/isaidub/movies', async (req, res) => {
       const href = $(el).attr("href");
       const title = $(el).text().replace("[+]", "").trim();
       
-      let thumbnail = null;
-      const yearMatch = title.match(/\((\d{4})\)/);
-      const year = yearMatch ? yearMatch[1] : '';
-      const nameForUrl = title.toLowerCase()
-        .replace(/[^a-z0-9\s]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-');
-      
-      if (year) {
-        thumbnail = `${SOURCES.isaidub}/uploads/posters/${nameForUrl}.jpg`;
-      }
-      
-      if (href && title && !title.match(/^(Download|Tamil|Home|Contact|Check)/i)) {
+      if (href && title && href.includes('movie') && !title.match(/^(Download|Tamil|Home|Contact|Check)/i)) {
+        const yearMatch = title.match(/\((\d{4})\)/);
+        const year = yearMatch ? yearMatch[1] : '';
+        const nameForUrl = title.toLowerCase()
+          .replace(/[^a-z0-9\s]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-');
+        
+        const thumbnail = year 
+          ? `${SOURCES.isaidub}/uploads/posters/${nameForUrl}.jpg`
+          : null;
+        
         movies.push({
           title,
           link: href.startsWith("http") ? href : SOURCES.isaidub + href,
@@ -185,7 +186,7 @@ app.get('/api/isaidub/movies', async (req, res) => {
     res.json(movies);
   } catch (error) {
     console.error('ISAIDUB Movies Error:', error.message);
-    res.status(500).json({ error: error.message });
+    res.json([]);
   }
 });
 
@@ -386,19 +387,18 @@ app.get('/api/moviesda/movies', async (req, res) => {
       const href = $(el).attr("href");
       const title = $(el).text().replace("[+]", "").trim();
       
-      let thumbnail = null;
-      const yearMatch = title.match(/\((\d{4})\)/);
-      const year = yearMatch ? yearMatch[1] : '';
-      const nameForUrl = title.toLowerCase()
-        .replace(/[^a-z0-9\s]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-');
-      
-      if (year) {
-        thumbnail = `${SOURCES.moviesda}/uploads/posters/${nameForUrl}.jpg`;
-      }
-      
-      if (href && title && !title.match(/^(Home|Download|Tamil)/i)) {
+      if (href && title && href.includes('movie') && !title.match(/^(Home|Download|Tamil)/i)) {
+        const yearMatch = title.match(/\((\d{4})\)/);
+        const year = yearMatch ? yearMatch[1] : '';
+        const nameForUrl = title.toLowerCase()
+          .replace(/[^a-z0-9\s]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-');
+        
+        const thumbnail = year 
+          ? `${SOURCES.moviesda}/uploads/posters/${nameForUrl}.jpg`
+          : null;
+        
         movies.push({
           title,
           link: href.startsWith("http") ? href : SOURCES.moviesda + href,
@@ -409,7 +409,8 @@ app.get('/api/moviesda/movies', async (req, res) => {
 
     res.json(movies);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Moviesda Error:', error.message);
+    res.json([]);
   }
 });
 

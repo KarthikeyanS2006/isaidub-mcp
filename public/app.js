@@ -485,19 +485,30 @@ async function searchMovies(query) {
     
     showLoading(true);
     searchSuggestions.style.display = 'none';
+    moviesSection.style.display = 'block';
+    myListSection.style.display = 'none';
     
     try {
-        const [isaidubRes, moviesdaRes] = await Promise.all([
-            fetch(`${API_BASE}/api/isaidub/search?q=${encodeURIComponent(query)}`),
-            fetch(`${API_BASE}/api/moviesda/search?q=${encodeURIComponent(query)}`)
-        ]);
+        let isaidubMovies = [];
+        let moviesdaMovies = [];
         
-        const isaidubMovies = await isaidubRes.json();
-        const moviesdaMovies = await moviesdaRes.json();
+        try {
+            const isaidubRes = await fetch(`${API_BASE}/api/isaidub/search?q=${encodeURIComponent(query)}`);
+            isaidubMovies = await isaidubRes.json();
+        } catch (e) {
+            console.error('ISAIDUB search error:', e);
+        }
+        
+        try {
+            const moviesdaRes = await fetch(`${API_BASE}/api/moviesda/search?q=${encodeURIComponent(query)}`);
+            moviesdaMovies = await moviesdaRes.json();
+        } catch (e) {
+            console.error('Moviesda search error:', e);
+        }
         
         const combinedMovies = [
-            ...isaidubMovies.map(m => ({ ...m, source: 'isaidub' })),
-            ...moviesdaMovies.map(m => ({ ...m, source: 'moviesda' }))
+            ...(isaidubMovies || []).map(m => ({ ...m, source: 'isaidub' })),
+            ...(moviesdaMovies || []).map(m => ({ ...m, source: 'moviesda' }))
         ];
         
         if (combinedMovies.length === 0) {
@@ -515,7 +526,8 @@ async function searchMovies(query) {
         
         closeMobileMenu();
     } catch (error) {
-        moviesSection.innerHTML = `<p style="text-align:center;color:#e50914;padding:50px;">Error: ${error.message}</p>`;
+        console.error('Search error:', error);
+        moviesSection.innerHTML = '<p style="text-align:center;color:#e50914;padding:50px;">Search failed. Please try again.</p>';
     } finally {
         showLoading(false);
     }

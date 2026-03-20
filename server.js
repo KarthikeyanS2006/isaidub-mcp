@@ -205,19 +205,18 @@ app.get('/api/isaidub/search', async (req, res) => {
       const href = $(el).attr("href");
       const title = $(el).text().replace("[+]", "").trim();
       
-      let thumbnail = null;
-      const yearMatch = title.match(/\((\d{4})\)/);
-      const year = yearMatch ? yearMatch[1] : '';
-      const nameForUrl = title.toLowerCase()
-        .replace(/[^a-z0-9\s]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-');
-      
-      if (year) {
-        thumbnail = `${SOURCES.isaidub}/uploads/posters/${nameForUrl}.jpg`;
-      }
-      
-      if (href && title && !title.match(/^(Download|Tamil|Home|Contact|Check)/i)) {
+      if (href && title && href.includes('movie') && !title.match(/^(Download|Tamil|Home|Contact|Check)/i)) {
+        const yearMatch = title.match(/\((\d{4})\)/);
+        const year = yearMatch ? yearMatch[1] : '';
+        const nameForUrl = title.toLowerCase()
+          .replace(/[^a-z0-9\s]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-');
+        
+        const thumbnail = year 
+          ? `${SOURCES.isaidub}/uploads/posters/${nameForUrl}.jpg`
+          : null;
+        
         results.push({
           title,
           link: href.startsWith("http") ? href : SOURCES.isaidub + href,
@@ -228,7 +227,8 @@ app.get('/api/isaidub/search', async (req, res) => {
 
     res.json(results);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('ISAIDUB search error:', error.message);
+    res.json([]);
   }
 });
 
@@ -421,7 +421,7 @@ app.get('/api/moviesda/search', async (req, res) => {
   }
   
   try {
-    const { data } = await axios.get(`${SOURCES.moviesda}/?s=${encodeURIComponent(q)}`);
+    const { data } = await axios.get(`${SOURCES.moviesda}/?s=${encodeURIComponent(q)}`, axiosConfig);
     const $ = cheerio.load(data);
     const results = [];
 
@@ -429,19 +429,18 @@ app.get('/api/moviesda/search', async (req, res) => {
       const href = $(el).attr("href");
       const title = $(el).text().replace("[+]", "").trim();
       
-      let thumbnail = null;
-      const yearMatch = title.match(/\((\d{4})\)/);
-      const year = yearMatch ? yearMatch[1] : '';
-      const nameForUrl = title.toLowerCase()
-        .replace(/[^a-z0-9\s]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-');
-      
-      if (year) {
-        thumbnail = `${SOURCES.moviesda}/uploads/posters/${nameForUrl}.jpg`;
-      }
-      
-      if (href && title && !title.match(/^(Home|Download|Tamil)/i)) {
+      if (href && title && href.includes('movie') && !title.match(/^(Home|Download|Tamil)/i)) {
+        const yearMatch = title.match(/\((\d{4})\)/);
+        const year = yearMatch ? yearMatch[1] : '';
+        const nameForUrl = title.toLowerCase()
+          .replace(/[^a-z0-9\s]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-');
+        
+        const thumbnail = year 
+          ? `${SOURCES.moviesda}/uploads/posters/${nameForUrl}.jpg`
+          : null;
+        
         results.push({
           title,
           link: href.startsWith("http") ? href : SOURCES.moviesda + href,
@@ -450,9 +449,37 @@ app.get('/api/moviesda/search', async (req, res) => {
       }
     });
 
+    $('b').each((_, el) => {
+      const text = $(el).text().trim();
+      const parent = $(el).parent();
+      const href = parent.attr('href');
+      
+      if (href && href.includes('movie') && text && text.length > 3) {
+        const yearMatch = text.match(/\((\d{4})\)/);
+        const year = yearMatch ? yearMatch[1] : '';
+        const nameForUrl = text.toLowerCase()
+          .replace(/[^a-z0-9\s]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-');
+        
+        const thumbnail = year 
+          ? `${SOURCES.moviesda}/uploads/posters/${nameForUrl}.jpg`
+          : null;
+        
+        if (!results.find(r => r.title === text)) {
+          results.push({
+            title: text,
+            link: href.startsWith("http") ? href : SOURCES.moviesda + href,
+            thumbnail: thumbnail
+          });
+        }
+      }
+    });
+
     res.json(results);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Moviesda search error:', error.message);
+    res.json([]);
   }
 });
 

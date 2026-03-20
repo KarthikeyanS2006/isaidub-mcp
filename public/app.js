@@ -1,12 +1,14 @@
 const API_BASE = window.location.origin;
 let currentSource = 'isaidub';
 let currentCategory = '2026';
+let currentMediaType = 'all';
 let currentMovieUrl = null;
 let currentMovieTitle = null;
 let heroMovies = [];
 let heroIndex = 0;
 let heroInterval = null;
 let allMovies = [];
+let reduceMotion = false;
 
 const splashScreen = document.getElementById('splashScreen');
 const searchInput = document.getElementById('searchInput');
@@ -30,6 +32,7 @@ const downloadLinks = document.getElementById('downloadLinks');
 const loadingLinks = document.getElementById('loadingLinks');
 const tabs = document.querySelectorAll('.source-tab');
 const catTabs = document.querySelectorAll('.cat-tab');
+const typeTabs = document.querySelectorAll('.type-tab');
 
 const navbar = document.querySelector('.navbar');
 const heroSection = document.getElementById('heroSection');
@@ -48,10 +51,135 @@ const hamburger = document.getElementById('hamburger');
 const mobileMenu = document.getElementById('mobileMenu');
 const mobileSearchInput = document.getElementById('mobileSearchInput');
 const modalPlayTrailer = document.getElementById('modalPlayTrailer');
+const previewModal = document.getElementById('previewModal');
+const previewClose = document.getElementById('previewClose');
+const previewTitle = document.getElementById('previewTitle');
+const previewDesc = document.getElementById('previewDesc');
+const previewAddList = document.getElementById('previewAddList');
+const previewPlay = document.getElementById('previewPlay');
+const previewThumb = document.getElementById('previewThumb');
+const searchSuggestions = document.getElementById('searchSuggestions');
+const myListSection = document.getElementById('myListSection');
+const myListGrid = document.getElementById('myListGrid');
+const continueSection = document.getElementById('continueSection');
+const continueGrid = document.getElementById('continueGrid');
+const reduceMotionBtn = document.getElementById('reduceMotionBtn');
+const mobileReduceMotionBtn = document.getElementById('mobileReduceMotionBtn');
 
-const genres = ['All', 'Action', 'Horror', 'Comedy', 'Drama', 'Thriller', 'Romance', 'Sci-Fi'];
+// LocalStorage Manager
+const Storage = {
+    MY_LIST_KEY: 'srikcyan_my_list',
+    CONTINUE_WATCHING_KEY: 'srikcyan_continue',
+    REDUCE_MOTION_KEY: 'srikcyan_reduce_motion',
+    LAST_SOURCE_KEY: 'srikcyan_source',
+    LAST_CATEGORY_KEY: 'srikcyan_category',
+    
+    getMyList() {
+        const data = localStorage.getItem(this.MY_LIST_KEY);
+        return data ? JSON.parse(data) : [];
+    },
+    
+    saveMyList(list) {
+        localStorage.setItem(this.MY_LIST_KEY, JSON.stringify(list));
+        updateMyListCount();
+    },
+    
+    addToMyList(movie) {
+        const list = this.getMyList();
+        if (!list.find(m => m.link === movie.link)) {
+            list.unshift(movie);
+            this.saveMyList(list);
+            showToast('Added to My List');
+        }
+    },
+    
+    removeFromMyList(movie) {
+        let list = this.getMyList();
+        list = list.filter(m => m.link !== movie.link);
+        this.saveMyList(list);
+        showToast('Removed from My List');
+        renderMyList();
+    },
+    
+    isInMyList(movie) {
+        const list = this.getMyList();
+        return list.some(m => m.link === movie.link);
+    },
+    
+    getContinueWatching() {
+        const data = localStorage.getItem(this.CONTINUE_WATCHING_KEY);
+        return data ? JSON.parse(data) : [];
+    },
+    
+    addToContinue(movie) {
+        let list = this.getContinueWatching();
+        list = list.filter(m => m.link !== movie.link);
+        list.unshift({ ...movie, lastWatched: Date.now() });
+        list = list.slice(0, 20);
+        localStorage.setItem(this.CONTINUE_WATCHING_KEY, JSON.stringify(list));
+        renderContinueWatching();
+    },
+    
+    setReduceMotion(value) {
+        reduceMotion = value;
+        localStorage.setItem(this.REDUCE_MOTION_KEY, value);
+        document.body.classList.toggle('reduce-motion', value);
+        updateMotionButtons();
+    },
+    
+    getReduceMotion() {
+        return localStorage.getItem(this.REDUCE_MOTION_KEY) === 'true';
+    },
+    
+    setLastSource(source) {
+        localStorage.setItem(this.LAST_SOURCE_KEY, source);
+    },
+    
+    getLastSource() {
+        return localStorage.getItem(this.LAST_SOURCE_KEY) || 'isaidub';
+    },
+    
+    setLastCategory(category) {
+        localStorage.setItem(this.LAST_CATEGORY_KEY, category);
+    },
+    
+    getLastCategory() {
+        return localStorage.getItem(this.LAST_CATEGORY_KEY) || '2026';
+    }
+};
+
+function showToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.classList.add('show'), 10);
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 2000);
+}
+
+function updateMotionButtons() {
+    const btns = [reduceMotionBtn, mobileReduceMotionBtn];
+    btns.forEach(btn => {
+        if (btn) btn.classList.toggle('active', reduceMotion);
+    });
+}
 
 window.addEventListener('load', () => {
+    reduceMotion = Storage.getReduceMotion();
+    document.body.classList.toggle('reduce-motion', reduceMotion);
+    updateMotionButtons();
+    
+    currentSource = Storage.getLastSource();
+    currentCategory = Storage.getLastCategory();
+    
+    const sourceTab = document.querySelector(`.source-tab[data-source="${currentSource}"]`);
+    const catTab = document.querySelector(`.cat-tab[data-category="${currentCategory}"]`);
+    if (sourceTab) sourceTab.classList.add('active');
+    if (catTab) catTab.classList.add('active');
+    
     setTimeout(() => {
         splashScreen.classList.add('hidden');
     }, 4000);
@@ -79,6 +207,9 @@ async function fetchMovies() {
             
             createMovieRows(movies);
         }
+        
+        renderMyList();
+        renderContinueWatching();
     } catch (error) {
         moviesSection.innerHTML = `<p style="text-align:center;color:#e50914;padding:50px;">Error: ${error.message}</p>`;
         console.error('Fetch error:', error);
@@ -90,21 +221,34 @@ async function fetchMovies() {
 function createMovieRows(movies) {
     moviesSection.innerHTML = '';
     
-    const allRow = createRow('All Results', movies, 'all');
+    let filteredMovies = movies;
+    if (currentMediaType === 'movies') {
+        filteredMovies = movies.filter(m => 
+            !m.title.toLowerCase().match(/season|episode|web series|series/i)
+        );
+    } else if (currentMediaType === 'webseries') {
+        filteredMovies = movies.filter(m => 
+            m.title.toLowerCase().match(/season|episode|web series|series/i) ||
+            m.link.toLowerCase().includes('web-series') ||
+            m.link.toLowerCase().includes('season')
+        );
+    }
+    
+    const allRow = createRow('Latest', filteredMovies, 'all');
     moviesSection.appendChild(allRow);
     
-    const isaidubMovies = movies.filter(m => m.source === 'isaidub');
-    const moviesdaMovies = movies.filter(m => m.source === 'moviesda');
+    const isaidubMovies = filteredMovies.filter(m => m.source === 'isaidub');
+    const moviesdaMovies = filteredMovies.filter(m => m.source === 'moviesda');
     
     if (isaidubMovies.length >= 5) {
-        moviesSection.appendChild(createRow('Tamil Dubbed (ISAIDUB)', isaidubMovies, 'isaidub'));
+        moviesSection.appendChild(createRow('Tamil Dubbed', isaidubMovies, 'isaidub'));
     }
     
     if (moviesdaMovies.length >= 5) {
-        moviesSection.appendChild(createRow('Tamil Movies (Moviesda)', moviesdaMovies, 'moviesda'));
+        moviesSection.appendChild(createRow('Tamil Movies', moviesdaMovies, 'moviesda'));
     }
     
-    const shuffled = [...movies].sort(() => Math.random() - 0.5);
+    const shuffled = [...filteredMovies].sort(() => Math.random() - 0.5);
     const actionMovies = shuffled.filter(m => 
         m.title.toLowerCase().match(/action|war|battle|fight|superhero|army|martial|kick|punch/) || 
         Math.random() > 0.6
@@ -126,19 +270,19 @@ function createMovieRows(movies) {
     ).slice(0, 15);
     
     if (actionMovies.length >= 5) {
-        moviesSection.appendChild(createRow('Action Movies', actionMovies, 'action'));
+        moviesSection.appendChild(createRow('Action', actionMovies, 'action'));
     }
     
     if (horrorMovies.length >= 5) {
-        moviesSection.appendChild(createRow('Horror Movies', horrorMovies, 'horror'));
+        moviesSection.appendChild(createRow('Horror', horrorMovies, 'horror'));
     }
     
     if (comedyMovies.length >= 5) {
-        moviesSection.appendChild(createRow('Comedy Movies', comedyMovies, 'comedy'));
+        moviesSection.appendChild(createRow('Comedy', comedyMovies, 'comedy'));
     }
     
     if (dramaMovies.length >= 5) {
-        moviesSection.appendChild(createRow('Drama Movies', dramaMovies, 'drama'));
+        moviesSection.appendChild(createRow('Drama', dramaMovies, 'drama'));
     }
     
     addScrollListeners();
@@ -224,6 +368,59 @@ function addScrollListeners() {
     });
 }
 
+function renderMyList() {
+    const list = Storage.getMyList();
+    myListGrid.innerHTML = '';
+    
+    if (list.length === 0) {
+        myListSection.style.display = 'none';
+        return;
+    }
+    
+    myListSection.style.display = 'block';
+    document.getElementById('myListRowCount').textContent = `${list.length} movies`;
+    
+    list.forEach(movie => {
+        const card = createMovieCard(movie, true);
+        myListGrid.appendChild(card);
+    });
+    
+    addScrollListeners();
+}
+
+function renderContinueWatching() {
+    const list = Storage.getContinueWatching();
+    continueGrid.innerHTML = '';
+    
+    if (list.length === 0) {
+        continueSection.style.display = 'none';
+        return;
+    }
+    
+    continueSection.style.display = 'block';
+    
+    list.forEach(movie => {
+        const card = createMovieCard(movie, true);
+        continueGrid.appendChild(card);
+    });
+    
+    addScrollListeners();
+}
+
+function updateMyListCount() {
+    const count = Storage.getMyList().length;
+    const countEls = [
+        document.getElementById('myListCount'),
+        document.getElementById('mobileMyListCount')
+    ];
+    countEls.forEach(el => {
+        if (el) {
+            el.textContent = count;
+            el.style.display = count > 0 ? 'inline-block' : 'none';
+        }
+    });
+}
+
 function createHeroIndicators() {
     heroIndicators.innerHTML = '';
     heroMovies.forEach((_, i) => {
@@ -248,7 +445,7 @@ function goToHeroSlide(index) {
     setTimeout(() => {
         updateHeroSection(heroMovies[heroIndex]);
         heroBackdrop.style.opacity = '1';
-    }, 400);
+    }, reduceMotion ? 0 : 400);
     updateHeroIndicators();
     resetHeroSlideshow();
 }
@@ -280,10 +477,10 @@ function startHeroSlideshow() {
             setTimeout(() => {
                 updateHeroSection(heroMovies[heroIndex]);
                 heroBackdrop.style.opacity = '1';
-            }, 400);
+            }, reduceMotion ? 0 : 400);
             updateHeroIndicators();
         }
-    }, 7000);
+    }, reduceMotion ? 15000 : 7000);
 }
 
 function resetHeroSlideshow() {
@@ -324,6 +521,7 @@ async function searchMovies(query) {
     if (!query.trim()) return;
     
     showLoading(true);
+    searchSuggestions.style.display = 'none';
     
     try {
         const [isaidubRes, moviesdaRes] = await Promise.all([
@@ -360,7 +558,7 @@ async function searchMovies(query) {
     }
 }
 
-function createMovieCard(movie) {
+function createMovieCard(movie, showRemove = false) {
     const card = document.createElement('div');
     card.className = 'movie-card';
     const imgHtml = movie.thumbnail 
@@ -368,15 +566,72 @@ function createMovieCard(movie) {
         : '';
     const emojiHtml = `<div class="movie-poster" style="display:${movie.thumbnail ? 'none' : 'flex'};">🎬</div>`;
     const sourceBadge = movie.source === 'moviesda' ? 'Tamil' : 'Tamil Dubbed';
+    const isInList = Storage.isInMyList(movie);
+    
+    let actionsHtml = '';
+    if (showRemove) {
+        actionsHtml = `
+            <div class="card-actions">
+                <button class="card-action-btn remove-btn" data-link="${movie.link}" title="Remove">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                </button>
+            </div>
+        `;
+    }
+    
     const overlayHtml = `
         <div class="movie-overlay">
+            ${actionsHtml}
             <span class="movie-badge">${sourceBadge}</span>
             <h3 class="movie-title">${escapeHtml(movie.title)}</h3>
+            <button class="add-list-btn ${isInList ? 'added' : ''}" data-link="${movie.link}" data-title="${escapeHtml(movie.title)}" data-thumb="${movie.thumbnail || ''}">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                    ${isInList 
+                        ? '<path d="M19 13H5v-2h14v2z"/>' 
+                        : '<path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>'}
+                </svg>
+            </button>
         </div>
     `;
+    
     card.innerHTML = `${imgHtml}${emojiHtml}${overlayHtml}`;
-    card.addEventListener('click', () => openModal(movie));
+    card.addEventListener('click', (e) => {
+        if (e.target.closest('.add-list-btn')) {
+            e.stopPropagation();
+            handleAddToList(e.target.closest('.add-list-btn'), movie);
+        } else if (e.target.closest('.remove-btn')) {
+            e.stopPropagation();
+            Storage.removeFromMyList(movie);
+        } else if (e.target.closest('.card-action-btn')) {
+            e.stopPropagation();
+        } else {
+            openModal(movie);
+        }
+    });
+    
     return card;
+}
+
+function handleAddToList(btn, movie) {
+    if (Storage.isInMyList(movie)) {
+        Storage.removeFromMyList(movie);
+        btn.classList.remove('added');
+        btn.innerHTML = `
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+            </svg>
+        `;
+    } else {
+        Storage.addToMyList(movie);
+        btn.classList.add('added');
+        btn.innerHTML = `
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <path d="M19 13H5v-2h14v2z"/>
+            </svg>
+        `;
+    }
 }
 
 async function fetchMovieDetails(url) {
@@ -570,6 +825,7 @@ function openModal(movie) {
     modal.classList.add('active');
     document.body.style.overflow = 'hidden';
     
+    Storage.addToContinue(movie);
     closeMobileMenu();
     fetchMovieDetails(movie.link);
 }
@@ -609,12 +865,28 @@ if (searchBtn) {
 }
 
 if (searchInput) {
+    searchInput.addEventListener('focus', () => {
+        searchSuggestions.style.display = 'block';
+    });
+    
+    searchInput.addEventListener('blur', () => {
+        setTimeout(() => searchSuggestions.style.display = 'none', 200);
+    });
+    
     searchInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             searchMovies(searchInput.value);
         }
     });
 }
+
+document.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+        const query = chip.dataset.query;
+        if (searchInput) searchInput.value = query;
+        searchMovies(query);
+    });
+});
 
 if (hamburger) {
     hamburger.addEventListener('click', toggleMobileMenu);
@@ -635,24 +907,65 @@ document.querySelectorAll('.mobile-nav-link').forEach(link => {
     });
 });
 
+document.getElementById('mobileHomeLink')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    goHome();
+});
+
+document.getElementById('mobileMyListLink')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    showMyList();
+    closeMobileMenu();
+});
+
+document.getElementById('mobileContinueLink')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    showContinueWatching();
+    closeMobileMenu();
+});
+
 const homeLink = document.getElementById('homeLink');
-const mobileHomeLink = document.getElementById('mobileHomeLink');
+const myListLink = document.getElementById('myListLink');
+const continueWatchingLink = document.getElementById('continueWatchingLink');
 
 function goHome() {
-    currentSource = 'isaidub';
-    currentCategory = '2026';
+    currentSource = Storage.getLastSource();
+    currentCategory = Storage.getLastCategory();
+    currentMediaType = 'all';
     
     tabs.forEach(t => t.classList.remove('active'));
-    document.querySelector('.source-tab[data-source="isaidub"]')?.classList.add('active');
+    document.querySelector(`.source-tab[data-source="${currentSource}"]`)?.classList.add('active');
     
     catTabs.forEach(t => t.classList.remove('active'));
-    document.querySelector('.cat-tab[data-category="2026"]')?.classList.add('active');
+    document.querySelector(`.cat-tab[data-category="${currentCategory}"]`)?.classList.add('active');
+    
+    typeTabs.forEach(t => t.classList.remove('active'));
+    document.querySelector('.type-tab[data-type="all"]')?.classList.add('active');
+    
+    myListSection.style.display = 'none';
+    continueSection.style.display = 'none';
+    moviesSection.style.display = 'block';
     
     if (searchInput) searchInput.value = '';
     if (mobileSearchInput) mobileSearchInput.value = '';
     
     fetchMovies();
-    closeMobileMenu();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function showMyList() {
+    myListSection.style.display = 'block';
+    continueSection.style.display = 'none';
+    moviesSection.style.display = 'none';
+    renderMyList();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function showContinueWatching() {
+    continueSection.style.display = 'block';
+    myListSection.style.display = 'none';
+    moviesSection.style.display = 'none';
+    renderContinueWatching();
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -663,12 +976,30 @@ if (homeLink) {
     });
 }
 
-if (mobileHomeLink) {
-    mobileHomeLink.addEventListener('click', (e) => {
+if (myListLink) {
+    myListLink.addEventListener('click', (e) => {
         e.preventDefault();
-        goHome();
+        showMyList();
     });
 }
+
+if (continueWatchingLink) {
+    continueWatchingLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        showContinueWatching();
+    });
+}
+
+typeTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+        typeTabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        currentMediaType = tab.dataset.type;
+        if (allMovies.length > 0) {
+            createMovieRows(allMovies);
+        }
+    });
+});
 
 tabs.forEach(tab => {
     tab.addEventListener('click', () => {
@@ -677,10 +1008,10 @@ tabs.forEach(tab => {
         tab.classList.add('active');
         document.querySelector(`.cat-tab[data-category="${currentCategory}"]`)?.classList.add('active');
         currentSource = tab.dataset.source;
+        Storage.setLastSource(currentSource);
         if (searchInput) searchInput.value = '';
         if (mobileSearchInput) mobileSearchInput.value = '';
         fetchMovies();
-        closeMobileMenu();
     });
 });
 
@@ -689,12 +1020,24 @@ catTabs.forEach(tab => {
         catTabs.forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         currentCategory = tab.dataset.category;
+        Storage.setLastCategory(currentCategory);
         if (searchInput) searchInput.value = '';
         if (mobileSearchInput) mobileSearchInput.value = '';
         fetchMovies();
-        closeMobileMenu();
     });
 });
+
+if (reduceMotionBtn) {
+    reduceMotionBtn.addEventListener('click', () => {
+        Storage.setReduceMotion(!reduceMotion);
+    });
+}
+
+if (mobileReduceMotionBtn) {
+    mobileReduceMotionBtn.addEventListener('click', () => {
+        Storage.setReduceMotion(!reduceMotion);
+    });
+}
 
 if (modalClose) {
     modalClose.addEventListener('click', closeModalHandler);
@@ -717,6 +1060,12 @@ if (trailerModal) {
         if (e.target === trailerModal) {
             closeTrailerModal();
         }
+    });
+}
+
+if (previewClose) {
+    previewClose.addEventListener('click', () => {
+        previewModal.classList.remove('active');
     });
 }
 
@@ -752,8 +1101,11 @@ document.addEventListener('keydown', (e) => {
             closeTrailerModal();
         } else if (modal && modal.classList.contains('active')) {
             closeModalHandler();
+        } else if (previewModal && previewModal.classList.contains('active')) {
+            previewModal.classList.remove('active');
         }
     }
 });
 
+updateMyListCount();
 fetchMovies();

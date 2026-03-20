@@ -35,11 +35,27 @@
                     </svg>
                     Home
                 </a>
-                <a href="#" class="nav-link">Movies</a>
-                <a href="#" class="nav-link">New</a>
+                <a href="#" class="nav-link" id="myListLink">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                        <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9h-4v4h-2v-4H9V9h4V5h2v4h4v2z"/>
+                    </svg>
+                    My List
+                    <span class="badge-count" id="myListCount">0</span>
+                </a>
+                <a href="#" class="nav-link" id="continueWatchingLink">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                        <path d="M21 6h-2v9H6v2c0 .55.45 1 1 1h11l4 4V7c0-.55-.45-1-1-1zm-4 6V3c0-.55-.45-1-1-1H3c-.55 0-1 .45-1 1v14l4-4h10c.55 0 1-.45 1-1z"/>
+                    </svg>
+                    Continue
+                </a>
             </div>
         </div>
         <div class="nav-right">
+            <button class="icon-btn" id="reduceMotionBtn" title="Reduce Motion">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-4h2v2h-2zm0-2h2V7h-2z"/>
+                </svg>
+            </button>
             <button class="hamburger" id="hamburger">
                 <span></span>
                 <span></span>
@@ -64,8 +80,25 @@
             </svg>
             Home
         </a>
-        <a href="#" class="mobile-nav-link">Movies</a>
-        <a href="#" class="mobile-nav-link">New</a>
+        <a href="#" class="mobile-nav-link" id="mobileMyListLink">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9h-4v4h-2v-4H9V9h4V5h2v4h4v2z"/>
+            </svg>
+            My List
+            <span class="badge-count" id="mobileMyListCount">0</span>
+        </a>
+        <a href="#" class="mobile-nav-link" id="mobileContinueLink">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                <path d="M21 6h-2v9H6v2c0 .55.45 1 1 1h11l4 4V7c0-.55-.45-1-1-1zm-4 6V3c0-.55-.45-1-1-1H3c-.55 0-1 .45-1 1v14l4-4h10c.55 0 1-.45 1-1z"/>
+            </svg>
+            Continue Watching
+        </a>
+        <button class="icon-btn mobile-motion-btn" id="mobileReduceMotionBtn">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-4h2v2h-2zm0-2h2V7h-2z"/>
+            </svg>
+            Reduce Motion
+        </button>
         <div class="mobile-search">
             <input type="text" id="mobileSearchInput" placeholder="Search movies...">
         </div>
@@ -112,8 +145,13 @@
             <div class="loader"></div>
         </div>
 
-        <!-- Source Tabs -->
+        <!-- Source & Media Type Tabs -->
         <div class="tabs-container">
+            <div class="type-tabs">
+                <button class="type-tab active" data-type="all">All</button>
+                <button class="type-tab" data-type="movies">Movies</button>
+                <button class="type-tab" data-type="webseries">Web Series</button>
+            </div>
             <div class="source-tabs">
                 <button class="source-tab active" data-source="isaidub">Tamil Dubbed</button>
                 <button class="source-tab" data-source="moviesda">Tamil Movies</button>
@@ -125,10 +163,84 @@
             </div>
         </div>
 
+        <!-- My List Section (Hidden by default) -->
+        <section class="movies-section" id="myListSection" style="display: none;">
+            <div class="movies-row">
+                <div class="row-header">
+                    <h2 class="row-title">My List</h2>
+                    <span class="row-count" id="myListRowCount">0 movies</span>
+                </div>
+                <div class="movies-slider">
+                    <div class="movie-grid" id="myListGrid"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Continue Watching Section (Hidden by default) -->
+        <section class="movies-section" id="continueSection" style="display: none;">
+            <div class="movies-row">
+                <div class="row-header">
+                    <h2 class="row-title">Continue Watching</h2>
+                </div>
+                <div class="movies-slider">
+                    <div class="movie-grid" id="continueGrid"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Search Suggestions -->
+        <div class="search-suggestions" id="searchSuggestions" style="display: none;">
+            <p class="suggestion-text">Try saying:</p>
+            <div class="suggestion-chips">
+                <button class="chip" data-query="funny movies">"Something funny"</button>
+                <button class="chip" data-query="action movies">"Action movies"</button>
+                <button class="chip" data-query="horror movies">"Scary movies"</button>
+                <button class="chip" data-query="short movies">"Short movies"</button>
+            </div>
+        </div>
+
         <section class="movies-section" id="moviesSection">
             <!-- Movie rows will be added dynamically -->
         </section>
     </main>
+
+    <!-- Preview Modal -->
+    <div class="preview-modal" id="previewModal">
+        <div class="preview-content">
+            <button class="preview-close" id="previewClose">&times;</button>
+            <div class="preview-video" id="previewVideo">
+                <div class="preview-placeholder">
+                    <svg viewBox="0 0 24 24" width="60" height="60" fill="currentColor">
+                        <path d="M8 5v14l11-7z"/>
+                    </svg>
+                    <p>Click to Preview</p>
+                </div>
+            </div>
+            <div class="preview-info">
+                <h3 id="previewTitle"></h3>
+                <p id="previewDesc"></p>
+                <div class="preview-actions">
+                    <button class="btn-play-small" id="previewPlay">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                            <path d="M8 5v14l11-7z"/>
+                        </svg>
+                        Play
+                    </button>
+                    <button class="btn-add-list" id="previewAddList">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                        </svg>
+                        My List
+                    </button>
+                    <button class="btn-thumb" id="previewThumb">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                            <path d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div id="movieModal" class="modal">
         <div class="modal-content">

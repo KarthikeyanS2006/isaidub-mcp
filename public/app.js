@@ -71,8 +71,13 @@ async function searchMovies(query) {
 function createMovieCard(movie) {
     const card = document.createElement('div');
     card.className = 'movie-card';
+    const imgHtml = movie.thumbnail 
+        ? `<img src="${movie.thumbnail}" alt="${escapeHtml(movie.title)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">`
+        : '';
+    const emojiHtml = `<div class="movie-poster" style="display:${movie.thumbnail ? 'none' : 'flex'};">🎬</div>`;
     card.innerHTML = `
-        <div class="movie-poster">🎬</div>
+        ${imgHtml}
+        ${emojiHtml}
         <div class="movie-info">
             <h3 class="movie-title">${escapeHtml(movie.title)}</h3>
         </div>

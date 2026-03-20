@@ -160,6 +160,13 @@ header p {
     font-size: 3rem;
 }
 
+.movie-card img {
+    width: 100%;
+    height: 280px;
+    object-fit: cover;
+    display: block;
+}
+
 .movie-info {
     padding: 15px;
 }

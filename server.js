@@ -152,7 +152,10 @@ app.get('/api/movies', async (req, res) => {
       const parent = $(el).parent();
       const img = parent.find("img");
       if (img.length) {
-        thumbnail = img.attr("src") || img.attr("data-src") || null;
+        let imgSrc = img.attr("src") || img.attr("data-src") || null;
+        if (imgSrc) {
+          thumbnail = imgSrc.startsWith("http") ? imgSrc : BASE_URL + imgSrc;
+        }
       }
       
       if (href && title && !title.match(/^(Download|Tamil|Home|Contact|Check)/i)) {
@@ -190,7 +193,10 @@ app.get('/api/search', async (req, res) => {
       const parent = $(el).parent();
       const img = parent.find("img");
       if (img.length) {
-        thumbnail = img.attr("src") || img.attr("data-src") || null;
+        let imgSrc = img.attr("src") || img.attr("data-src") || null;
+        if (imgSrc) {
+          thumbnail = imgSrc.startsWith("http") ? imgSrc : BASE_URL + imgSrc;
+        }
       }
       
       if (href && title && !title.match(/^(Download|Tamil|Home|Contact|Check)/i)) {

@@ -139,12 +139,11 @@ body {
     padding: 0 4%;
     z-index: 100;
     background: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, transparent 100%);
-    transition: background 0.3s, padding 0.3s;
+    transition: background 0.3s;
 }
 
 .navbar.scrolled {
     background: var(--dark);
-    padding: 0 4%;
 }
 
 .nav-left {
@@ -153,7 +152,6 @@ body {
     gap: 30px;
 }
 
-/* Animated Logo */
 .logo {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 2.2rem;
@@ -242,7 +240,6 @@ body {
     gap: 15px;
 }
 
-/* Hamburger Menu */
 .hamburger {
     display: none;
     flex-direction: column;
@@ -311,8 +308,6 @@ body {
     color: var(--text);
     cursor: pointer;
     padding: 5px;
-    display: flex;
-    align-items: center;
 }
 
 /* Mobile Menu */
@@ -373,7 +368,7 @@ body {
     backdrop-filter: blur(10px);
     z-index: 90;
     flex-wrap: wrap;
-    margin-bottom: 20px;
+    margin-top: 68px;
 }
 
 .source-tabs, .category-tabs {
@@ -406,13 +401,13 @@ body {
 
 /* Main Content */
 main {
-    padding-top: 80px;
+    padding-top: 30px;
 }
 
 /* Hero Section */
 .hero-section {
     position: relative;
-    height: 85vh;
+    height: 80vh;
     min-height: 500px;
     overflow: hidden;
 }
@@ -442,7 +437,7 @@ main {
 
 .hero-content {
     position: absolute;
-    bottom: 18%;
+    bottom: 15%;
     left: 4%;
     max-width: 650px;
     z-index: 10;
@@ -584,21 +579,49 @@ main {
 
 /* Movies Section */
 .movies-section {
-    padding: 50px 4%;
-    margin-top: -100px;
-    position: relative;
-    z-index: 20;
+    padding: 30px 0;
 }
 
 .movies-row {
-    margin-bottom: 50px;
+    margin-bottom: 40px;
+    position: relative;
+}
+
+.row-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 4%;
+    margin-bottom: 15px;
 }
 
 .row-title {
-    font-size: 1.5rem;
+    font-size: 1.4rem;
     font-weight: 600;
-    margin-bottom: 20px;
     color: var(--text);
+}
+
+.row-nav {
+    display: flex;
+    gap: 8px;
+}
+
+.row-nav-btn {
+    width: 35px;
+    height: 35px;
+    background: var(--dark-lighter);
+    border: none;
+    border-radius: 50%;
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+}
+
+.row-nav-btn:hover {
+    background: var(--primary);
 }
 
 .movies-slider {
@@ -611,17 +634,26 @@ main {
     gap: 12px;
     overflow-x: auto;
     scroll-behavior: smooth;
-    padding: 15px 0;
+    padding: 15px 4%;
     scrollbar-width: none;
+    -ms-overflow-style: none;
 }
 
 .movie-grid::-webkit-scrollbar {
     display: none;
 }
 
+.movie-grid:hover {
+    cursor: grab;
+}
+
+.movie-grid:active {
+    cursor: grabbing;
+}
+
 .movie-card {
     flex-shrink: 0;
-    width: 220px;
+    width: 200px;
     border-radius: 6px;
     overflow: hidden;
     cursor: pointer;
@@ -637,14 +669,14 @@ main {
 
 .movie-card img {
     width: 100%;
-    height: 300px;
+    height: 280px;
     object-fit: cover;
     background: var(--dark-light);
 }
 
 .movie-card .movie-poster {
     width: 100%;
-    height: 300px;
+    height: 280px;
     background: linear-gradient(135deg, var(--primary), #8b0000);
     display: flex;
     align-items: center;
@@ -661,7 +693,7 @@ main {
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
-    padding: 20px;
+    padding: 15px;
 }
 
 .movie-card:hover .movie-overlay {
@@ -669,20 +701,20 @@ main {
 }
 
 .movie-card .movie-title {
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     font-weight: 600;
     line-height: 1.3;
     color: var(--text);
-    margin-bottom: 8px;
+    margin-bottom: 5px;
 }
 
 .movie-card .movie-badge {
     display: inline-block;
     background: var(--primary);
     color: var(--text);
-    padding: 4px 10px;
+    padding: 3px 8px;
     border-radius: 3px;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     font-weight: 700;
     text-transform: uppercase;
 }
@@ -741,7 +773,7 @@ main {
 
 .modal-backdrop {
     width: 100%;
-    height: 65vh;
+    height: 60vh;
     min-height: 350px;
     background-size: cover;
     background-position: center top;
@@ -752,7 +784,7 @@ main {
     top: 0;
     left: 0;
     right: 0;
-    height: 65vh;
+    height: 60vh;
     min-height: 350px;
     background: linear-gradient(to top, var(--dark) 0%, transparent 50%);
 }
@@ -771,7 +803,7 @@ main {
 }
 
 .modal-title {
-    font-size: 2.8rem;
+    font-size: 2.5rem;
     font-weight: 800;
     margin-bottom: 15px;
     line-height: 1.1;
@@ -849,8 +881,8 @@ main {
 }
 
 .modal-poster {
-    width: 280px;
-    height: 400px;
+    width: 260px;
+    height: 380px;
     background-size: cover;
     background-position: center;
     border-radius: 6px;
@@ -1049,8 +1081,8 @@ main {
 /* Footer */
 .footer {
     background: var(--dark);
-    padding: 80px 4% 40px;
-    margin-top: 80px;
+    padding: 60px 4% 30px;
+    margin-top: 40px;
     border-top: 1px solid var(--dark-light);
 }
 
@@ -1062,12 +1094,12 @@ main {
 
 .footer-logo {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 3rem;
+    font-size: 2.5rem;
     letter-spacing: 2px;
     display: flex;
     justify-content: center;
     align-items: center;
-    margin-bottom: 20px;
+    margin-bottom: 15px;
 }
 
 .footer-logo .logo-s,
@@ -1082,22 +1114,22 @@ main {
 
 .footer-tagline {
     color: var(--text-muted);
-    font-size: 1.1rem;
-    margin-bottom: 35px;
+    font-size: 1rem;
+    margin-bottom: 30px;
 }
 
 .footer-links {
     display: flex;
     justify-content: center;
-    gap: 35px;
-    margin-bottom: 35px;
+    gap: 30px;
+    margin-bottom: 30px;
     flex-wrap: wrap;
 }
 
 .footer-links a {
     color: var(--text-muted);
     text-decoration: none;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     transition: color 0.3s;
 }
 
@@ -1107,17 +1139,13 @@ main {
 
 .copyright {
     color: var(--text-muted);
-    font-size: 0.85rem;
+    font-size: 0.8rem;
 }
 
 /* Mobile Responsive - Tablet */
 @media (max-width: 992px) {
     .hero-title {
         font-size: 3rem;
-    }
-    
-    .hero-description {
-        font-size: 1rem;
     }
     
     .modal-body {
@@ -1133,12 +1161,12 @@ main {
     
     .modal-poster {
         width: 100%;
-        max-width: 280px;
+        max-width: 260px;
         height: 350px;
     }
     
     .modal-title {
-        font-size: 2.2rem;
+        font-size: 2rem;
     }
 }
 
@@ -1153,7 +1181,7 @@ main {
     }
     
     .logo {
-        font-size: 1.8rem;
+        font-size: 1.6rem;
     }
     
     .hamburger {
@@ -1164,17 +1192,29 @@ main {
         display: none;
     }
     
+    .tabs-container {
+        flex-direction: column;
+        gap: 15px;
+        padding: 15px 20px;
+        align-items: center;
+    }
+    
+    .source-tabs, .category-tabs {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
     main {
-        padding-top: 110px;
+        padding-top: 20px;
     }
     
     .hero-section {
-        height: 70vh;
-        min-height: 450px;
+        height: 60vh;
+        min-height: 400px;
     }
     
     .hero-title {
-        font-size: 2.2rem;
+        font-size: 2rem;
     }
     
     .hero-description {
@@ -1184,12 +1224,12 @@ main {
     
     .hero-buttons {
         flex-direction: column;
-        gap: 12px;
+        gap: 10px;
     }
     
     .btn-play, .btn-info {
         padding: 12px 24px;
-        font-size: 0.95rem;
+        font-size: 0.9rem;
         justify-content: center;
     }
     
@@ -1197,30 +1237,38 @@ main {
         display: none;
     }
     
-    .movies-section {
-        margin-top: -60px;
-        padding: 30px 4%;
+    .movies-row {
+        margin-bottom: 30px;
     }
     
     .row-title {
-        font-size: 1.3rem;
+        font-size: 1.2rem;
+    }
+    
+    .row-nav {
+        display: none;
+    }
+    
+    .movie-grid {
+        padding: 10px 4%;
+        gap: 10px;
     }
     
     .movie-card {
-        width: 160px;
+        width: 150px;
     }
     
     .movie-card img,
     .movie-card .movie-poster {
-        height: 230px;
+        height: 220px;
     }
     
     .modal-backdrop {
-        height: 45vh;
+        height: 40vh;
     }
     
     .modal-gradient {
-        height: 45vh;
+        height: 40vh;
     }
     
     .modal-close {
@@ -1232,11 +1280,11 @@ main {
     }
     
     .modal-title {
-        font-size: 1.8rem;
+        font-size: 1.6rem;
     }
     
     .modal-synopsis {
-        font-size: 1rem;
+        font-size: 0.95rem;
     }
     
     .modal-poster {
@@ -1244,25 +1292,25 @@ main {
     }
     
     .modal-download {
-        padding: 30px 5%;
+        padding: 25px 5%;
     }
     
     .quality-btn {
-        padding: 12px 20px;
-        font-size: 0.9rem;
+        padding: 12px 18px;
+        font-size: 0.85rem;
     }
     
     .download-btn, .watch-btn {
-        padding: 15px 25px;
-        font-size: 1rem;
+        padding: 14px 20px;
+        font-size: 0.95rem;
     }
     
     .footer {
-        padding: 50px 4% 30px;
+        padding: 40px 4% 25px;
     }
     
     .footer-logo {
-        font-size: 2.2rem;
+        font-size: 2rem;
     }
     
     .footer-links {
@@ -1273,7 +1321,7 @@ main {
 /* Mobile Responsive - Small Mobile */
 @media (max-width: 480px) {
     .logo {
-        font-size: 1.5rem;
+        font-size: 1.4rem;
     }
     
     .splash-logo {
@@ -1285,22 +1333,22 @@ main {
     }
     
     .hero-content {
-        bottom: 15%;
+        bottom: 12%;
         left: 20px;
         right: 20px;
     }
     
     .hero-title {
-        font-size: 1.8rem;
+        font-size: 1.6rem;
     }
     
     .movie-card {
-        width: 140px;
+        width: 130px;
     }
     
     .movie-card img,
     .movie-card .movie-poster {
-        height: 200px;
+        height: 190px;
     }
     
     .modal-poster {

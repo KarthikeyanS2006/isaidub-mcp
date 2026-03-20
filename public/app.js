@@ -6,11 +6,12 @@ let currentMovieTitle = null;
 let heroMovies = [];
 let heroIndex = 0;
 let heroInterval = null;
+let allMovies = [];
 
 const splashScreen = document.getElementById('splashScreen');
 const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
-const movieGrid = document.getElementById('movieGrid');
+const moviesSection = document.getElementById('moviesSection');
 const loading = document.getElementById('loading');
 const modal = document.getElementById('movieModal');
 const modalClose = document.getElementById('modalClose');
@@ -48,6 +49,8 @@ const mobileMenu = document.getElementById('mobileMenu');
 const mobileSearchInput = document.getElementById('mobileSearchInput');
 const modalPlayTrailer = document.getElementById('modalPlayTrailer');
 
+const genres = ['All', 'Action', 'Horror', 'Comedy', 'Drama', 'Thriller', 'Romance', 'Sci-Fi'];
+
 window.addEventListener('load', () => {
     setTimeout(() => {
         splashScreen.classList.add('hidden');
@@ -56,7 +59,6 @@ window.addEventListener('load', () => {
 
 async function fetchMovies() {
     showLoading(true);
-    movieGrid.innerHTML = '';
     
     try {
         const url = `${API_BASE}/api/${currentSource}/movies?category=${currentCategory}`;
@@ -67,32 +69,148 @@ async function fetchMovies() {
         console.log('Got movies:', movies.length);
         
         if (movies.length === 0) {
-            movieGrid.innerHTML = '<p class="no-results">No movies found</p>';
+            moviesSection.innerHTML = '<p style="text-align:center;color:#b3b3b3;padding:50px;">No movies found</p>';
         } else {
+            allMovies = movies;
             heroMovies = movies.slice(0, 5);
             createHeroIndicators();
             updateHeroSection(heroMovies[0]);
             startHeroSlideshow();
             
-            movies.forEach(movie => {
-                const card = createMovieCard(movie);
-                movieGrid.appendChild(card);
-            });
+            createMovieRows(movies);
         }
-        
-        updateRowTitle();
     } catch (error) {
-        movieGrid.innerHTML = `<p class="error-msg">Error: ${error.message}</p>`;
+        moviesSection.innerHTML = `<p style="text-align:center;color:#e50914;padding:50px;">Error: ${error.message}</p>`;
         console.error('Fetch error:', error);
     } finally {
         showLoading(false);
     }
 }
 
-function updateRowTitle() {
-    const rowTitle = document.getElementById('rowTitle');
-    const sourceName = currentSource === 'isaidub' ? 'Tamil Dubbed' : 'Tamil Movies';
-    rowTitle.textContent = `${sourceName} ${currentCategory}`;
+function createMovieRows(movies) {
+    moviesSection.innerHTML = '';
+    
+    const allRow = createRow('Latest Movies', movies, 'all');
+    moviesSection.appendChild(allRow);
+    
+    const shuffled = [...movies].sort(() => Math.random() - 0.5);
+    const actionMovies = shuffled.filter(m => 
+        m.title.toLowerCase().match(/action|war|battle|fight|superhero|army/) || 
+        Math.random() > 0.6
+    ).slice(0, 15);
+    
+    const horrorMovies = shuffled.filter(m => 
+        m.title.toLowerCase().match(/horror|ghost|devil|nightmare|evil|haunted|curse/) ||
+        Math.random() > 0.7
+    ).slice(0, 15);
+    
+    const comedyMovies = shuffled.filter(m => 
+        m.title.toLowerCase().match(/comedy|fun|funny|party|hilarious/) ||
+        Math.random() > 0.65
+    ).slice(0, 15);
+    
+    const dramaMovies = shuffled.filter(m => 
+        m.title.toLowerCase().match(/drama|family|emotion|heart|sad/) ||
+        Math.random() > 0.65
+    ).slice(0, 15);
+    
+    if (actionMovies.length >= 5) {
+        moviesSection.appendChild(createRow('Action Movies', actionMovies, 'action'));
+    }
+    
+    if (horrorMovies.length >= 5) {
+        moviesSection.appendChild(createRow('Horror Movies', horrorMovies, 'horror'));
+    }
+    
+    if (comedyMovies.length >= 5) {
+        moviesSection.appendChild(createRow('Comedy Movies', comedyMovies, 'comedy'));
+    }
+    
+    if (dramaMovies.length >= 5) {
+        moviesSection.appendChild(createRow('Drama Movies', dramaMovies, 'drama'));
+    }
+    
+    addScrollListeners();
+}
+
+function createRow(title, movies, rowId) {
+    const row = document.createElement('div');
+    row.className = 'movies-row';
+    row.innerHTML = `
+        <div class="row-header">
+            <h2 class="row-title">${title}</h2>
+            <div class="row-nav">
+                <button class="row-nav-btn prev-btn" data-row="${rowId}">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+                    </svg>
+                </button>
+                <button class="row-nav-btn next-btn" data-row="${rowId}">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div class="movies-slider">
+            <div class="movie-grid" id="grid-${rowId}"></div>
+        </div>
+    `;
+    
+    const grid = row.querySelector(`#grid-${rowId}`);
+    movies.forEach(movie => {
+        const card = createMovieCard(movie);
+        grid.appendChild(card);
+    });
+    
+    row.querySelector('.prev-btn').addEventListener('click', () => slideRow(rowId, -1));
+    row.querySelector('.next-btn').addEventListener('click', () => slideRow(rowId, 1));
+    
+    return row;
+}
+
+function slideRow(rowId, direction) {
+    const grid = document.getElementById(`grid-${rowId}`);
+    if (grid) {
+        const scrollAmount = 220;
+        grid.scrollBy({
+            left: direction * scrollAmount,
+            behavior: 'smooth'
+        });
+    }
+}
+
+function addScrollListeners() {
+    document.querySelectorAll('.movie-grid').forEach(grid => {
+        let isDown = false;
+        let startX;
+        let scrollLeft;
+
+        grid.addEventListener('mousedown', (e) => {
+            isDown = true;
+            grid.style.cursor = 'grabbing';
+            startX = e.pageX - grid.offsetLeft;
+            scrollLeft = grid.scrollLeft;
+        });
+
+        grid.addEventListener('mouseleave', () => {
+            isDown = false;
+            grid.style.cursor = 'grab';
+        });
+
+        grid.addEventListener('mouseup', () => {
+            isDown = false;
+            grid.style.cursor = 'grab';
+        });
+
+        grid.addEventListener('mousemove', (e) => {
+            if (!isDown) return;
+            e.preventDefault();
+            const x = e.pageX - grid.offsetLeft;
+            const walk = (x - startX) * 2;
+            grid.scrollLeft = scrollLeft - walk;
+        });
+    });
 }
 
 function createHeroIndicators() {
@@ -195,7 +313,6 @@ async function searchMovies(query) {
     if (!query.trim()) return;
     
     showLoading(true);
-    movieGrid.innerHTML = '';
     
     try {
         const url = `${API_BASE}/api/${currentSource}/search?q=${encodeURIComponent(query)}`;
@@ -203,26 +320,21 @@ async function searchMovies(query) {
         const movies = await response.json();
         
         if (movies.length === 0) {
-            movieGrid.innerHTML = '<p class="no-results">No movies found for your search</p>';
+            moviesSection.innerHTML = '<p style="text-align:center;color:#b3b3b3;padding:50px;">No movies found for your search</p>';
         } else {
+            allMovies = movies;
             heroMovies = movies.slice(0, 5);
             createHeroIndicators();
             if (heroMovies.length > 0) {
                 updateHeroSection(heroMovies[0]);
             }
             
-            movies.forEach(movie => {
-                const card = createMovieCard(movie);
-                movieGrid.appendChild(card);
-            });
+            createMovieRows(movies);
         }
-        
-        const rowTitle = document.getElementById('rowTitle');
-        rowTitle.textContent = `Search Results for "${query}"`;
         
         closeMobileMenu();
     } catch (error) {
-        movieGrid.innerHTML = `<p class="error-msg">Error: ${error.message}</p>`;
+        moviesSection.innerHTML = `<p style="text-align:center;color:#e50914;padding:50px;">Error: ${error.message}</p>`;
     } finally {
         showLoading(false);
     }
@@ -459,15 +571,6 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-function slideMovies(direction) {
-    const grid = movieGrid;
-    const scrollAmount = 230;
-    grid.scrollBy({
-        left: direction * scrollAmount,
-        behavior: 'smooth'
-    });
-}
-
 function toggleMobileMenu() {
     hamburger.classList.toggle('active');
     mobileMenu.classList.toggle('active');
@@ -559,11 +662,19 @@ if (trailerModal) {
 }
 
 if (sliderPrev) {
-    sliderPrev.addEventListener('click', () => slideMovies(-1));
+    sliderPrev.addEventListener('click', () => {
+        if (heroMovies.length > 0) {
+            goToHeroSlide((heroIndex - 1 + heroMovies.length) % heroMovies.length);
+        }
+    });
 }
 
 if (sliderNext) {
-    sliderNext.addEventListener('click', () => slideMovies(1));
+    sliderNext.addEventListener('click', () => {
+        if (heroMovies.length > 0) {
+            goToHeroSlide((heroIndex + 1) % heroMovies.length);
+        }
+    });
 }
 
 window.addEventListener('scroll', () => {

@@ -61,15 +61,12 @@ const previewThumb = document.getElementById('previewThumb');
 const searchSuggestions = document.getElementById('searchSuggestions');
 const myListSection = document.getElementById('myListSection');
 const myListGrid = document.getElementById('myListGrid');
-const continueSection = document.getElementById('continueSection');
-const continueGrid = document.getElementById('continueGrid');
 const reduceMotionBtn = document.getElementById('reduceMotionBtn');
 const mobileReduceMotionBtn = document.getElementById('mobileReduceMotionBtn');
 
 // LocalStorage Manager
 const Storage = {
     MY_LIST_KEY: 'srikcyan_my_list',
-    CONTINUE_WATCHING_KEY: 'srikcyan_continue',
     REDUCE_MOTION_KEY: 'srikcyan_reduce_motion',
     LAST_SOURCE_KEY: 'srikcyan_source',
     LAST_CATEGORY_KEY: 'srikcyan_category',
@@ -104,20 +101,6 @@ const Storage = {
     isInMyList(movie) {
         const list = this.getMyList();
         return list.some(m => m.link === movie.link);
-    },
-    
-    getContinueWatching() {
-        const data = localStorage.getItem(this.CONTINUE_WATCHING_KEY);
-        return data ? JSON.parse(data) : [];
-    },
-    
-    addToContinue(movie) {
-        let list = this.getContinueWatching();
-        list = list.filter(m => m.link !== movie.link);
-        list.unshift({ ...movie, lastWatched: Date.now() });
-        list = list.slice(0, 20);
-        localStorage.setItem(this.CONTINUE_WATCHING_KEY, JSON.stringify(list));
-        renderContinueWatching();
     },
     
     setReduceMotion(value) {
@@ -209,7 +192,6 @@ async function fetchMovies() {
         }
         
         renderMyList();
-        renderContinueWatching();
     } catch (error) {
         moviesSection.innerHTML = `<p style="text-align:center;color:#e50914;padding:50px;">Error: ${error.message}</p>`;
         console.error('Fetch error:', error);
@@ -383,25 +365,6 @@ function renderMyList() {
     list.forEach(movie => {
         const card = createMovieCard(movie, true);
         myListGrid.appendChild(card);
-    });
-    
-    addScrollListeners();
-}
-
-function renderContinueWatching() {
-    const list = Storage.getContinueWatching();
-    continueGrid.innerHTML = '';
-    
-    if (list.length === 0) {
-        continueSection.style.display = 'none';
-        return;
-    }
-    
-    continueSection.style.display = 'block';
-    
-    list.forEach(movie => {
-        const card = createMovieCard(movie, true);
-        continueGrid.appendChild(card);
     });
     
     addScrollListeners();
@@ -825,7 +788,6 @@ function openModal(movie) {
     modal.classList.add('active');
     document.body.style.overflow = 'hidden';
     
-    Storage.addToContinue(movie);
     closeMobileMenu();
     fetchMovieDetails(movie.link);
 }
@@ -918,15 +880,8 @@ document.getElementById('mobileMyListLink')?.addEventListener('click', (e) => {
     closeMobileMenu();
 });
 
-document.getElementById('mobileContinueLink')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    showContinueWatching();
-    closeMobileMenu();
-});
-
 const homeLink = document.getElementById('homeLink');
 const myListLink = document.getElementById('myListLink');
-const continueWatchingLink = document.getElementById('continueWatchingLink');
 
 function goHome() {
     currentSource = Storage.getLastSource();
@@ -961,14 +916,6 @@ function showMyList() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function showContinueWatching() {
-    continueSection.style.display = 'block';
-    myListSection.style.display = 'none';
-    moviesSection.style.display = 'none';
-    renderContinueWatching();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
 if (homeLink) {
     homeLink.addEventListener('click', (e) => {
         e.preventDefault();
@@ -980,13 +927,6 @@ if (myListLink) {
     myListLink.addEventListener('click', (e) => {
         e.preventDefault();
         showMyList();
-    });
-}
-
-if (continueWatchingLink) {
-    continueWatchingLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        showContinueWatching();
     });
 }
 

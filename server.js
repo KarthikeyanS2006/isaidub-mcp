@@ -518,9 +518,17 @@ app.get('/api/moviesda/details', async (req, res) => {
     $(".f a").each((_, el) => {
       const href = $(el).attr("href");
       const text = $(el).text().trim();
-      if (href && text.match(/\d{3,4}p/i)) {
+      if (href && text.match(/\d{3,4}p|HQ|PreDVD|Original/i)) {
+        let quality = text;
+        if (/\d{3,4}p/i.test(text)) {
+          quality = text.match(/(\d{3,4}p)/i)?.[1] || text;
+        } else if (/HQ|PreDVD/i.test(text)) {
+          quality = 'HQ PreDVD';
+        } else if (/Original/i.test(text)) {
+          quality = 'Original';
+        }
         details.qualities.push({
-          quality: text.match(/(\d{3,4}p)/i)?.[1] || text,
+          quality: quality,
           url: href.startsWith("http") ? href : SOURCES.moviesda + href
         });
       }

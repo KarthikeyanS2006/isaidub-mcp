@@ -880,6 +880,55 @@ document.getElementById('mobileMyListLink')?.addEventListener('click', (e) => {
     closeMobileMenu();
 });
 
+// Mobile Menu Tab Handlers
+document.querySelectorAll('.mobile-type-tabs .mobile-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.mobile-type-tabs .mobile-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        document.querySelectorAll('.type-tab').forEach(t => t.classList.remove('active'));
+        document.querySelector(`.type-tab[data-type="${tab.dataset.type}"]`)?.classList.add('active');
+        
+        currentMediaType = tab.dataset.type;
+        if (allMovies.length > 0) {
+            createMovieRows(allMovies);
+        }
+        closeMobileMenu();
+    });
+});
+
+document.querySelectorAll('.mobile-source-tabs .mobile-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.mobile-source-tabs .mobile-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        document.querySelectorAll('.source-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+        document.querySelector(`.source-tab[data-source="${tab.dataset.source}"]`)?.classList.add('active');
+        document.querySelector(`.cat-tab[data-category="${currentCategory}"]`)?.classList.add('active');
+        
+        currentSource = tab.dataset.source;
+        Storage.setLastSource(currentSource);
+        fetchMovies();
+        closeMobileMenu();
+    });
+});
+
+document.querySelectorAll('.mobile-year-tabs .mobile-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.mobile-year-tabs .mobile-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+        document.querySelector(`.cat-tab[data-category="${tab.dataset.year}"]`)?.classList.add('active');
+        
+        currentCategory = tab.dataset.year;
+        Storage.setLastCategory(currentCategory);
+        fetchMovies();
+        closeMobileMenu();
+    });
+});
+
 const homeLink = document.getElementById('homeLink');
 const myListLink = document.getElementById('myListLink');
 
@@ -897,8 +946,17 @@ function goHome() {
     typeTabs.forEach(t => t.classList.remove('active'));
     document.querySelector('.type-tab[data-type="all"]')?.classList.add('active');
     
+    // Sync mobile menu tabs
+    document.querySelectorAll('.mobile-type-tabs .mobile-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.mobile-type-tabs .mobile-tab[data-type="all"]`)?.classList.add('active');
+    
+    document.querySelectorAll('.mobile-source-tabs .mobile-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.mobile-source-tabs .mobile-tab[data-source="${currentSource}"]`)?.classList.add('active');
+    
+    document.querySelectorAll('.mobile-year-tabs .mobile-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.mobile-year-tabs .mobile-tab[data-year="${currentCategory}"]`)?.classList.add('active');
+    
     myListSection.style.display = 'none';
-    continueSection.style.display = 'none';
     moviesSection.style.display = 'block';
     
     if (searchInput) searchInput.value = '';

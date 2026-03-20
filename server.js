@@ -2,14 +2,18 @@ import express from 'express';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import cors from 'cors';
+import path from 'path';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const BASE_URL = process.env.ISAIDUB_URL || "https://isaidub.love";
 
 app.use(cors());
-app.use(express.static('public'));
 app.use(express.json());
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
+});
 
 async function extractLinks($, selector) {
   const links = [];
@@ -256,6 +260,4 @@ app.get('/api/download', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`ISAIDUB Server running at http://localhost:${PORT}`);
-});
+export default app;

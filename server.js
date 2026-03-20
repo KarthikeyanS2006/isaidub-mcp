@@ -546,7 +546,7 @@ app.get('/api/moviesda/details', async (req, res) => {
     $(".f a").each((_, el) => {
       const href = $(el).attr("href");
       const text = $(el).text().trim();
-      if (href && href.includes('-movie/') || href.includes('-web-series/') || href.includes('-season-')) {
+      if (href && (href.includes('-movie/') || href.includes('-web-series/') || href.includes('-season-'))) {
         let quality = 'HQ PreDVD';
         if (/\d{3,4}p/i.test(text)) {
           quality = text.match(/(\d{3,4}p)/i)?.[1] || text;

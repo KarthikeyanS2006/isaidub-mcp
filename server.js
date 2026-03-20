@@ -12,6 +12,13 @@ const SOURCES = {
   moviesda: process.env.MOVIESDA_URL || "https://moviesda18.com"
 };
 
+const axiosConfig = {
+  timeout: 15000,
+  headers: {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+  }
+};
+
 app.use(cors());
 app.use(express.json());
 
@@ -145,7 +152,10 @@ app.get('/api/isaidub/movies', async (req, res) => {
   const targetUrl = url || `${SOURCES.isaidub}/tamil-2026-dubbed-movies/`;
   
   try {
-    const { data } = await axios.get(targetUrl);
+    console.log('Fetching:', targetUrl);
+    const response = await axios.get(targetUrl, axiosConfig);
+    const data = response.data;
+    console.log('Got data, length:', data.length);
     const $ = cheerio.load(data);
     const movies = [];
 
@@ -188,7 +198,7 @@ app.get('/api/isaidub/search', async (req, res) => {
   }
   
   try {
-    const { data } = await axios.get(`${SOURCES.isaidub}/?s=${encodeURIComponent(q)}`);
+    const { data } = await axios.get(`${SOURCES.isaidub}/?s=${encodeURIComponent(q)}`, axiosConfig);
     const $ = cheerio.load(data);
     const results = [];
 
@@ -231,7 +241,7 @@ app.get('/api/isaidub/qualities', async (req, res) => {
   }
   
   try {
-    const { data } = await axios.get(url);
+    const { data } = await axios.get(url, axiosConfig);
     const $ = cheerio.load(data);
     const allLinks = await extractLinks($, ".f a");
     const originalLink = allLinks.find(l => l.text.toLowerCase().includes("original"));
@@ -304,7 +314,7 @@ app.get('/api/isaidub/details', async (req, res) => {
   }
   
   try {
-    const { data } = await axios.get(url);
+    const { data } = await axios.get(url, axiosConfig);
     const $ = cheerio.load(data);
     
     const details = {
@@ -369,7 +379,7 @@ app.get('/api/moviesda/movies', async (req, res) => {
   const targetUrl = url || `${SOURCES.moviesda}/tamil-2026-movies/`;
   
   try {
-    const { data } = await axios.get(targetUrl);
+    const { data } = await axios.get(targetUrl, axiosConfig);
     const $ = cheerio.load(data);
     const movies = [];
 
@@ -455,7 +465,7 @@ app.get('/api/moviesda/details', async (req, res) => {
   }
   
   try {
-    const { data } = await axios.get(url);
+    const { data } = await axios.get(url, axiosConfig);
     const $ = cheerio.load(data);
     
     const details = {
@@ -531,7 +541,7 @@ app.get('/api/moviesda/qualities', async (req, res) => {
   }
   
   try {
-    const { data } = await axios.get(url);
+    const { data } = await axios.get(url, axiosConfig);
     const $ = cheerio.load(data);
     const qualities = [];
 
@@ -560,7 +570,7 @@ app.get('/api/moviesda/download', async (req, res) => {
   }
   
   try {
-    const { data } = await axios.get(url);
+    const { data } = await axios.get(url, axiosConfig);
     const $ = cheerio.load(data);
     
     const result = {

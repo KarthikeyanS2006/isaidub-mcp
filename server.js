@@ -305,61 +305,47 @@ app.get('/api/movie-details', async (req, res) => {
       starring: '',
       quality: '',
       language: '',
+      rating: '',
+      updated: '',
       synopsis: '',
       thumbnail: null
     };
     
-    details.title = $('h1.entry-title').text().trim() || $('h1').first().text().trim() || '';
+    details.title = $('title').text().split('(')[0].trim() || $('h1').first().text().trim() || '';
     
-    $('a[rel="tag"]').each((_, el) => {
-      const tag = $(el).text().trim();
-      if (tag && !tag.match(/^(Home|Download|Tamil)/i)) {
-        details.genres += (details.genres ? ', ' : '') + tag;
-      }
-    });
+    const posterImg = $('ul.movie-info img').attr('src') || $('img[alt*="poster"]').attr('src') || $('picture img').attr('src');
+    if (posterImg) {
+      details.thumbnail = posterImg.startsWith('http') ? posterImg : BASE_URL + posterImg;
+    }
     
-    $('img').each((_, el) => {
-      const src = $(el).attr('src') || $(el).attr('data-src');
-      if (src && src.includes('posters')) {
-        details.thumbnail = src.startsWith('http') ? src : BASE_URL + src;
-        return false;
-      }
-    });
-    
-    $('*').each((_, el) => {
+    $('ul.movie-info li').each((_, el) => {
       const text = $(el).text();
       if (text.includes('Director:')) {
-        details.director = text.replace('Director:', '').split('\n')[0].trim();
-        return false;
+        details.director = $(el).find('span').text().trim();
       }
       if (text.includes('Starring:')) {
-        details.starring = text.replace('Starring:', '').split('\n')[0].trim();
-        return false;
+        details.starring = $(el).find('span').text().trim();
+      }
+      if (text.includes('Genres:')) {
+        details.genres = $(el).find('span').text().trim();
       }
       if (text.includes('Quality:')) {
-        details.quality = text.replace('Quality:', '').split('\n')[0].trim();
-        return false;
+        details.quality = $(el).find('span').text().trim();
       }
       if (text.includes('Language:')) {
-        details.language = text.replace('Language:', '').split('\n')[0].trim();
-        return false;
+        details.language = $(el).find('span').text().trim();
+      }
+      if (text.includes('Movie Rating:')) {
+        details.rating = $(el).find('span').text().trim();
+      }
+      if (text.includes('Last Updated:')) {
+        details.updated = $(el).find('span').text().trim();
       }
     });
     
-    $('p').each((_, el) => {
-      const text = $(el).text();
-      if (text.includes('Synopsis:') || text.includes('Story:')) {
-        details.synopsis = text.replace(/(Synopsis|Story):/, '').trim();
-        return false;
-      }
-    });
-    
-    if (!details.synopsis) {
-      const entryContent = $('.entry-content').text() || $('.post-content').text() || '';
-      if (entryContent.length > 20) {
-        const sentences = entryContent.split('.').slice(0, 3).join('.');
-        details.synopsis = sentences + (sentences.endsWith('.') ? '' : '.');
-      }
+    const synopsisText = $('.movie-synopsis').text() || '';
+    if (synopsisText) {
+      details.synopsis = synopsisText.replace(/^Synopsis:\s*/i, '').trim();
     }
     
     res.json(details);

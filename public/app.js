@@ -15,6 +15,8 @@ const modalDirector = document.getElementById('modalDirector');
 const modalStarring = document.getElementById('modalStarring');
 const modalQuality = document.getElementById('modalQuality');
 const modalLanguage = document.getElementById('modalLanguage');
+const modalRating = document.getElementById('modalRating');
+const modalUpdated = document.getElementById('modalUpdated');
 const modalSynopsis = document.getElementById('modalSynopsis');
 const loadingDetails = document.getElementById('loadingDetails');
 const qualityOptions = document.getElementById('qualityOptions');
@@ -115,6 +117,8 @@ async function fetchMovieDetails(url) {
         modalStarring.innerHTML = details.starring ? `<strong>Starring:</strong> ${details.starring}` : '';
         modalQuality.innerHTML = details.quality ? `<strong>Quality:</strong> ${details.quality}` : '';
         modalLanguage.innerHTML = details.language ? `<strong>Language:</strong> ${details.language}` : '';
+        modalRating.innerHTML = details.rating ? `<strong>Rating:</strong> ${details.rating}` : '';
+        modalUpdated.innerHTML = details.updated ? `<strong>Updated:</strong> ${details.updated}` : '';
         modalSynopsis.textContent = details.synopsis || '';
         
     } catch (error) {
@@ -134,6 +138,8 @@ function openModal(movie) {
     modalStarring.innerHTML = '';
     modalQuality.innerHTML = '';
     modalLanguage.innerHTML = '';
+    modalRating.innerHTML = '';
+    modalUpdated.innerHTML = '';
     modalSynopsis.textContent = '';
     downloadLinks.innerHTML = '<p style="text-align:center;color:#888;">Select a quality to get download links</p>';
     

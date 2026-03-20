@@ -365,18 +365,15 @@ body {
 
 /* Tabs */
 .tabs-container {
-    position: fixed;
-    top: 68px;
-    left: 0;
-    right: 0;
     display: flex;
     justify-content: center;
     gap: 30px;
-    padding: 15px 4%;
-    background: rgba(20,20,20,0.95);
+    padding: 20px 4%;
+    background: rgba(20,20,20,0.98);
     backdrop-filter: blur(10px);
     z-index: 90;
     flex-wrap: wrap;
+    margin-bottom: 20px;
 }
 
 .source-tabs, .category-tabs {
@@ -409,7 +406,7 @@ body {
 
 /* Main Content */
 main {
-    padding-top: 130px;
+    padding-top: 80px;
 }
 
 /* Hero Section */

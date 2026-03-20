@@ -15,6 +15,9 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
 });
 
+app.use('/styles.css', express.static(path.join(process.cwd(), 'public', 'styles.css')));
+app.use('/app.js', express.static(path.join(process.cwd(), 'public', 'app.js')));
+
 async function extractLinks($, selector) {
   const links = [];
   $(selector).each((_, el) => {

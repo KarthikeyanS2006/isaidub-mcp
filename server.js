@@ -147,22 +147,12 @@ app.get('/api/movies', async (req, res) => {
     $(".f a").each((_, el) => {
       const href = $(el).attr("href");
       const title = $(el).text().replace("[+]", "").trim();
-      let thumbnail = null;
-      
-      const parent = $(el).parent();
-      const img = parent.find("img");
-      if (img.length) {
-        let imgSrc = img.attr("src") || img.attr("data-src") || null;
-        if (imgSrc) {
-          thumbnail = imgSrc.startsWith("http") ? imgSrc : BASE_URL + imgSrc;
-        }
-      }
       
       if (href && title && !title.match(/^(Download|Tamil|Home|Contact|Check)/i)) {
         movies.push({
           title,
           link: href.startsWith("http") ? href : BASE_URL + href,
-          thumbnail: thumbnail || null
+          thumbnail: null
         });
       }
     });
@@ -188,22 +178,12 @@ app.get('/api/search', async (req, res) => {
     $(".f a").each((_, el) => {
       const href = $(el).attr("href");
       const title = $(el).text().replace("[+]", "").trim();
-      let thumbnail = null;
-      
-      const parent = $(el).parent();
-      const img = parent.find("img");
-      if (img.length) {
-        let imgSrc = img.attr("src") || img.attr("data-src") || null;
-        if (imgSrc) {
-          thumbnail = imgSrc.startsWith("http") ? imgSrc : BASE_URL + imgSrc;
-        }
-      }
       
       if (href && title && !title.match(/^(Download|Tamil|Home|Contact|Check)/i)) {
         results.push({
           title,
           link: href.startsWith("http") ? href : BASE_URL + href,
-          thumbnail: thumbnail || null
+          thumbnail: null
         });
       }
     });

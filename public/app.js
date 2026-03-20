@@ -47,8 +47,11 @@ async function fetchMovies() {
     
     try {
         const url = `${API_BASE}/api/${currentSource}/movies?url=${encodeURIComponent(categoryUrls[currentSource][currentCategory])}`;
+        console.log('Fetching:', url);
         const response = await fetch(url);
+        console.log('Response status:', response.status);
         const movies = await response.json();
+        console.log('Got movies:', movies.length);
         
         if (movies.length === 0) {
             movieGrid.innerHTML = '<p class="no-results">No movies found</p>';

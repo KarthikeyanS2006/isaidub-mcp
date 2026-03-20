@@ -9,6 +9,14 @@ const loading = document.getElementById('loading');
 const modal = document.getElementById('movieModal');
 const closeModal = document.querySelector('.close');
 const modalTitle = document.getElementById('modalTitle');
+const modalPoster = document.getElementById('modalPoster');
+const modalGenres = document.getElementById('modalGenres');
+const modalDirector = document.getElementById('modalDirector');
+const modalStarring = document.getElementById('modalStarring');
+const modalQuality = document.getElementById('modalQuality');
+const modalLanguage = document.getElementById('modalLanguage');
+const modalSynopsis = document.getElementById('modalSynopsis');
+const loadingDetails = document.getElementById('loadingDetails');
 const qualityOptions = document.getElementById('qualityOptions');
 const downloadLinks = document.getElementById('downloadLinks');
 const loadingLinks = document.getElementById('loadingLinks');
@@ -86,16 +94,57 @@ function createMovieCard(movie) {
     return card;
 }
 
+async function fetchMovieDetails(url) {
+    loadingDetails.style.display = 'block';
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/movie-details?url=${encodeURIComponent(url)}`);
+        const details = await response.json();
+        
+        if (details.title) {
+            modalTitle.textContent = details.title;
+        }
+        
+        if (details.thumbnail) {
+            modalPoster.src = details.thumbnail;
+            modalPoster.style.display = 'block';
+        }
+        
+        modalGenres.textContent = details.genres ? `Genres: ${details.genres}` : '';
+        modalDirector.innerHTML = details.director ? `<strong>Director:</strong> ${details.director}` : '';
+        modalStarring.innerHTML = details.starring ? `<strong>Starring:</strong> ${details.starring}` : '';
+        modalQuality.innerHTML = details.quality ? `<strong>Quality:</strong> ${details.quality}` : '';
+        modalLanguage.innerHTML = details.language ? `<strong>Language:</strong> ${details.language}` : '';
+        modalSynopsis.textContent = details.synopsis || '';
+        
+    } catch (error) {
+        console.error('Error fetching details:', error);
+    } finally {
+        loadingDetails.style.display = 'none';
+    }
+}
+
 function openModal(movie) {
     currentMovieUrl = movie.link;
     modalTitle.textContent = movie.title;
+    modalPoster.src = movie.thumbnail || '';
+    modalPoster.style.display = movie.thumbnail ? 'block' : 'none';
+    modalGenres.textContent = '';
+    modalDirector.innerHTML = '';
+    modalStarring.innerHTML = '';
+    modalQuality.innerHTML = '';
+    modalLanguage.innerHTML = '';
+    modalSynopsis.textContent = '';
     downloadLinks.innerHTML = '<p style="text-align:center;color:#888;">Select a quality to get download links</p>';
     
     qualityOptions.querySelectorAll('.quality-btn').forEach(btn => {
         btn.classList.remove('selected');
     });
+    document.querySelector('.quality-btn[data-quality="720p"]').classList.add('selected');
     
     modal.style.display = 'block';
+    
+    fetchMovieDetails(movie.link);
 }
 
 function closeModalHandler() {
@@ -121,14 +170,14 @@ async function fetchDownloadLinks(url, quality) {
         let html = '';
         
         if (data.download && data.download.length > 0) {
-            html += '<h3 style="margin: 15px 0 10px;color:#28a745;">Download Links</h3>';
+            html += '<h3 style="margin: 15px 0 10px;color:#1a237e;">Download Links</h3>';
             data.download.forEach(link => {
                 html += `<a href="${link.url}" target="_blank" class="download-btn">${link.server} - Download</a>`;
             });
         }
         
         if (data.watch && data.watch.length > 0) {
-            html += '<h3 style="margin: 15px 0 10px;color:#007bff;">Watch Online</h3>';
+            html += '<h3 style="margin: 15px 0 10px;color:#1a237e;">Watch Online</h3>';
             data.watch.forEach(link => {
                 html += `<a href="${link.url}" target="_blank" class="watch-btn">${link.server} - Watch</a>`;
             });

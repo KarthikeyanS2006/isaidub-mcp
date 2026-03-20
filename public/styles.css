@@ -131,14 +131,14 @@ header p {
 
 .movie-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 25px;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 20px;
     padding: 20px 0;
 }
 
 .movie-card {
     background: #fff;
-    border-radius: 15px;
+    border-radius: 12px;
     overflow: hidden;
     cursor: pointer;
     transition: transform 0.3s, box-shadow 0.3s;
@@ -146,13 +146,19 @@ header p {
 }
 
 .movie-card:hover {
-    transform: translateY(-10px);
-    box-shadow: 0 10px 30px rgba(26, 35, 126, 0.2);
+    transform: translateY(-8px);
+    box-shadow: 0 12px 30px rgba(26, 35, 126, 0.2);
 }
 
-.movie-poster {
+.movie-card img {
     width: 100%;
-    height: 280px;
+    height: 250px;
+    object-fit: cover;
+}
+
+.movie-card .movie-poster {
+    width: 100%;
+    height: 250px;
     background: linear-gradient(135deg, #7986cb, #5c6bc0);
     display: flex;
     align-items: center;
@@ -160,32 +166,26 @@ header p {
     font-size: 3rem;
 }
 
-.movie-card img {
-    width: 100%;
-    height: 280px;
-    object-fit: cover;
-    display: block;
-}
-
 .movie-info {
-    padding: 15px;
+    padding: 12px;
 }
 
 .movie-title {
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     font-weight: 600;
-    margin-bottom: 8px;
     line-height: 1.3;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
     color: #1a1a2e;
+    min-height: 2.6em;
 }
 
-.movie-date {
-    font-size: 0.8rem;
+.movie-meta {
+    font-size: 0.75rem;
     color: #7986cb;
+    margin-top: 5px;
 }
 
 .modal {
@@ -198,17 +198,19 @@ header p {
     height: 100%;
     background: rgba(26, 35, 126, 0.5);
     backdrop-filter: blur(5px);
+    overflow-y: auto;
+    padding: 20px;
 }
 
 .modal-content {
     background: #fff;
-    margin: 5% auto;
-    padding: 30px;
     border-radius: 20px;
-    width: 90%;
-    max-width: 600px;
+    width: 100%;
+    max-width: 900px;
+    margin: 20px auto;
     position: relative;
     animation: modalSlide 0.3s ease;
+    overflow: hidden;
 }
 
 @keyframes modalSlide {
@@ -228,34 +230,104 @@ header p {
     top: 15px;
     font-size: 2rem;
     cursor: pointer;
-    color: #7986cb;
-    transition: color 0.3s;
+    color: #fff;
+    background: rgba(0,0,0,0.5);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    transition: background 0.3s;
 }
 
 .close:hover {
+    background: rgba(0,0,0,0.8);
+}
+
+.modal-body {
+    display: flex;
+    gap: 30px;
+    padding: 30px;
+}
+
+.modal-poster {
+    flex-shrink: 0;
+    width: 280px;
+}
+
+.modal-poster img {
+    width: 100%;
+    border-radius: 12px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+}
+
+.modal-info {
+    flex: 1;
+}
+
+.modal-info h2 {
+    color: #1a237e;
+    font-size: 1.8rem;
+    margin-bottom: 15px;
+    line-height: 1.2;
+}
+
+.modal-genres {
+    color: #5c6bc0;
+    font-weight: 600;
+    font-size: 1rem;
+    margin-bottom: 10px;
+}
+
+.modal-meta {
+    color: #666;
+    font-size: 0.95rem;
+    margin-bottom: 5px;
+}
+
+.modal-meta strong {
     color: #1a237e;
 }
 
-.modal-content h2 {
-    margin-bottom: 25px;
+.modal-synopsis {
+    color: #555;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin-top: 15px;
+    padding: 15px;
+    background: #f5f5f5;
+    border-radius: 10px;
+    border-left: 4px solid #1a237e;
+}
+
+.modal-download {
+    padding: 20px 30px 30px;
+    background: #f8f9fa;
+    border-top: 1px solid #eee;
+}
+
+.modal-download h3 {
     color: #1a237e;
-    padding-right: 40px;
+    margin-bottom: 15px;
+    text-align: center;
 }
 
 .quality-options {
     display: flex;
     justify-content: center;
     gap: 15px;
-    margin-bottom: 25px;
+    margin-bottom: 20px;
 }
 
 .quality-btn {
-    padding: 15px 35px;
+    padding: 12px 30px;
     background: #fff;
     border: 2px solid #1a237e;
     border-radius: 10px;
     color: #1a237e;
-    font-size: 1.1rem;
+    font-size: 1rem;
     cursor: pointer;
     transition: all 0.3s;
     font-weight: 600;
@@ -275,18 +347,20 @@ header p {
 .download-links {
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: 12px;
+    max-width: 500px;
+    margin: 0 auto;
 }
 
 .download-btn {
     display: block;
-    padding: 18px 25px;
+    padding: 15px 25px;
     background: #1565c0;
     border-radius: 10px;
     color: #fff;
     text-decoration: none;
     text-align: center;
-    font-size: 1.1rem;
+    font-size: 1rem;
     font-weight: 600;
     transition: all 0.3s;
 }
@@ -299,13 +373,13 @@ header p {
 
 .watch-btn {
     display: block;
-    padding: 18px 25px;
+    padding: 15px 25px;
     background: #283593;
     border-radius: 10px;
     color: #fff;
     text-decoration: none;
     text-align: center;
-    font-size: 1.1rem;
+    font-size: 1rem;
     font-weight: 600;
     transition: all 0.3s;
 }
@@ -365,20 +439,35 @@ footer p {
         align-items: center;
     }
     
-    .search-box input {
-        width: 100%;
-    }
-    
-    .search-box button {
+    .search-box input, .search-box button {
         width: 100%;
     }
     
     .movie-grid {
-        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 15px;
     }
     
-    .movie-poster {
+    .movie-card img, .movie-card .movie-poster {
         height: 200px;
+    }
+    
+    .modal-body {
+        flex-direction: column;
+        padding: 20px;
+    }
+    
+    .modal-poster {
+        width: 100%;
+    }
+    
+    .modal-poster img {
+        height: 250px;
+        object-fit: cover;
+    }
+    
+    .modal-info h2 {
+        font-size: 1.4rem;
     }
     
     .quality-options {
@@ -386,6 +475,7 @@ footer p {
     }
     
     .quality-btn {
-        padding: 12px 25px;
+        padding: 10px 20px;
+        font-size: 0.9rem;
     }
 }

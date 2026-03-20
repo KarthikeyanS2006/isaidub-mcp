@@ -34,16 +34,35 @@
         <div id="movieModal" class="modal">
             <div class="modal-content">
                 <span class="close">&times;</span>
-                <h2 id="modalTitle">Movie Title</h2>
-                <div id="qualityOptions" class="quality-options">
-                    <button class="quality-btn" data-quality="480p">480p</button>
-                    <button class="quality-btn" data-quality="720p">720p</button>
-                    <button class="quality-btn" data-quality="1080p">1080p</button>
+                <div class="modal-body">
+                    <div class="modal-poster">
+                        <img id="modalPoster" src="" alt="">
+                    </div>
+                    <div class="modal-info">
+                        <h2 id="modalTitle">Movie Title</h2>
+                        <p id="modalGenres" class="modal-genres"></p>
+                        <p id="modalDirector" class="modal-meta"></p>
+                        <p id="modalStarring" class="modal-meta"></p>
+                        <p id="modalQuality" class="modal-meta"></p>
+                        <p id="modalLanguage" class="modal-meta"></p>
+                        <p id="modalSynopsis" class="modal-synopsis"></p>
+                        <div id="loadingDetails" class="loading" style="display: none;">
+                            <div class="spinner"></div>
+                        </div>
+                    </div>
                 </div>
-                <div id="downloadLinks" class="download-links"></div>
-                <div id="loadingLinks" class="loading" style="display: none;">
-                    <div class="spinner"></div>
-                    <p>Fetching download links...</p>
+                <div class="modal-download">
+                    <h3>Select Quality</h3>
+                    <div id="qualityOptions" class="quality-options">
+                        <button class="quality-btn" data-quality="480p">480p</button>
+                        <button class="quality-btn selected" data-quality="720p">720p</button>
+                        <button class="quality-btn" data-quality="1080p">1080p</button>
+                    </div>
+                    <div id="downloadLinks" class="download-links"></div>
+                    <div id="loadingLinks" class="loading" style="display: none;">
+                        <div class="spinner"></div>
+                        <p>Fetching download links...</p>
+                    </div>
                 </div>
             </div>
         </div>

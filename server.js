@@ -287,4 +287,85 @@ app.get('/api/download', async (req, res) => {
   }
 });
 
+app.get('/api/movie-details', async (req, res) => {
+  const { url } = req.query;
+  
+  if (!url) {
+    return res.status(400).json({ error: "URL parameter is required" });
+  }
+  
+  try {
+    const { data } = await axios.get(url);
+    const $ = cheerio.load(data);
+    
+    const details = {
+      title: '',
+      genres: '',
+      director: '',
+      starring: '',
+      quality: '',
+      language: '',
+      synopsis: '',
+      thumbnail: null
+    };
+    
+    details.title = $('h1.entry-title').text().trim() || $('h1').first().text().trim() || '';
+    
+    $('a[rel="tag"]').each((_, el) => {
+      const tag = $(el).text().trim();
+      if (tag && !tag.match(/^(Home|Download|Tamil)/i)) {
+        details.genres += (details.genres ? ', ' : '') + tag;
+      }
+    });
+    
+    $('img').each((_, el) => {
+      const src = $(el).attr('src') || $(el).attr('data-src');
+      if (src && src.includes('posters')) {
+        details.thumbnail = src.startsWith('http') ? src : BASE_URL + src;
+        return false;
+      }
+    });
+    
+    $('*').each((_, el) => {
+      const text = $(el).text();
+      if (text.includes('Director:')) {
+        details.director = text.replace('Director:', '').split('\n')[0].trim();
+        return false;
+      }
+      if (text.includes('Starring:')) {
+        details.starring = text.replace('Starring:', '').split('\n')[0].trim();
+        return false;
+      }
+      if (text.includes('Quality:')) {
+        details.quality = text.replace('Quality:', '').split('\n')[0].trim();
+        return false;
+      }
+      if (text.includes('Language:')) {
+        details.language = text.replace('Language:', '').split('\n')[0].trim();
+        return false;
+      }
+    });
+    
+    $('p').each((_, el) => {
+      const text = $(el).text();
+      if (text.includes('Synopsis:') || text.includes('Story:')) {
+        details.synopsis = text.replace(/(Synopsis|Story):/, '').trim();
+        return false;
+      }
+    });
+    
+    if (!details.synopsis) {
+      const entryContent = $('.entry-content').text() || $('.post-content').text() || '';
+      if (entryContent.length > 20) {
+        const sentences = entryContent.split('.').slice(0, 3).join('.');
+        details.synopsis = sentences + (sentences.endsWith('.') ? '' : '.');
+      }
+    }
+    
+    res.json(details);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default app;

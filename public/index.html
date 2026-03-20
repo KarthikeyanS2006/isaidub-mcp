@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISAIDUB - Tamil Dubbed Movies</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>ISAIDUB</h1>
+            <p>Tamil Dubbed Movies - Direct Download</p>
+        </header>
+
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Search for movies...">
+            <button id="searchBtn">Search</button>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" data-category="latest">Latest Movies</button>
+            <button class="tab" data-category="2026">2026 Dubbed</button>
+            <button class="tab" data-category="2025">2025 Dubbed</button>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+
+        <div id="movieGrid" class="movie-grid"></div>
+
+        <div id="movieModal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2 id="modalTitle">Movie Title</h2>
+                <div id="qualityOptions" class="quality-options">
+                    <button class="quality-btn" data-quality="480p">480p</button>
+                    <button class="quality-btn" data-quality="720p">720p</button>
+                    <button class="quality-btn" data-quality="1080p">1080p</button>
+                </div>
+                <div id="downloadLinks" class="download-links"></div>
+                <div id="loadingLinks" class="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Fetching download links...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

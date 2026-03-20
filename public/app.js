@@ -176,7 +176,8 @@ async function fetchMovies() {
         console.log('Fetching:', url);
         const response = await fetch(url);
         console.log('Response status:', response.status);
-        const movies = await response.json();
+        const data = await response.json();
+        const movies = Array.isArray(data) ? data : [];
         console.log('Got movies:', movies.length);
         
         if (movies.length === 0) {
@@ -494,21 +495,23 @@ async function searchMovies(query) {
         
         try {
             const isaidubRes = await fetch(`${API_BASE}/api/isaidub/search?q=${encodeURIComponent(query)}`);
-            isaidubMovies = await isaidubRes.json();
+            const data1 = await isaidubRes.json();
+            isaidubMovies = Array.isArray(data1) ? data1 : [];
         } catch (e) {
             console.error('ISAIDUB search error:', e);
         }
         
         try {
             const moviesdaRes = await fetch(`${API_BASE}/api/moviesda/search?q=${encodeURIComponent(query)}`);
-            moviesdaMovies = await moviesdaRes.json();
+            const data2 = await moviesdaRes.json();
+            moviesdaMovies = Array.isArray(data2) ? data2 : [];
         } catch (e) {
             console.error('Moviesda search error:', e);
         }
         
         const combinedMovies = [
-            ...(isaidubMovies || []).map(m => ({ ...m, source: 'isaidub' })),
-            ...(moviesdaMovies || []).map(m => ({ ...m, source: 'moviesda' }))
+            ...isaidubMovies.map(m => ({ ...m, source: 'isaidub' })),
+            ...moviesdaMovies.map(m => ({ ...m, source: 'moviesda' }))
         ];
         
         if (combinedMovies.length === 0) {

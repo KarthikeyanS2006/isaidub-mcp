@@ -152,10 +152,8 @@ app.get('/api/isaidub/movies', async (req, res) => {
   const targetUrl = url || `${SOURCES.isaidub}/tamil-2026-dubbed-movies/`;
   
   try {
-    console.log('Fetching:', targetUrl);
     const response = await axios.get(targetUrl, axiosConfig);
     const data = response.data;
-    console.log('Got data, length:', data.length);
     const $ = cheerio.load(data);
     const movies = [];
 
@@ -186,6 +184,7 @@ app.get('/api/isaidub/movies', async (req, res) => {
 
     res.json(movies);
   } catch (error) {
+    console.error('ISAIDUB Movies Error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });

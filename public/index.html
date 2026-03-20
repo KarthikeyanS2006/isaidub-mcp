@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISAIDUB - Tamil Dubbed Movies</title>
+    <title>MoviesHub - Tamil & Tamil Dubbed Movies</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>ISAIDUB</h1>
-            <p>Tamil Dubbed Movies - Direct Download</p>
+            <h1>MoviesHub</h1>
+            <p>Tamil & Tamil Dubbed Movies - Direct Download</p>
         </header>
 
         <div class="search-box">
@@ -19,9 +19,14 @@
         </div>
 
         <div class="tabs">
-            <button class="tab active" data-category="latest">Latest Movies</button>
-            <button class="tab" data-category="2026">2026 Dubbed</button>
-            <button class="tab" data-category="2025">2025 Dubbed</button>
+            <button class="tab active" data-source="isaidub">Tamil Dubbed</button>
+            <button class="tab" data-source="moviesda">Tamil Movies</button>
+        </div>
+
+        <div class="category-tabs" id="categoryTabs">
+            <button class="cat-tab active" data-category="2026">2026</button>
+            <button class="cat-tab" data-category="2025">2025</button>
+            <button class="cat-tab" data-category="2024">2024</button>
         </div>
 
         <div id="loading" class="loading" style="display: none;">
@@ -55,11 +60,8 @@
                 </div>
                 <div class="modal-download">
                     <h3>Select Quality</h3>
-                    <div id="qualityOptions" class="quality-options">
-                        <button class="quality-btn" data-quality="480p">480p</button>
-                        <button class="quality-btn selected" data-quality="720p">720p</button>
-                        <button class="quality-btn" data-quality="1080p">1080p</button>
-                    </div>
+                    <div id="qualityOptions" class="quality-options"></div>
+                    <div id="fileInfo" class="file-info" style="display: none;"></div>
                     <div id="downloadLinks" class="download-links"></div>
                     <div id="loadingLinks" class="loading" style="display: none;">
                         <div class="spinner"></div>
@@ -72,7 +74,7 @@
 
     <footer>
         <div class="brand">Sri Keyan</div>
-        <p>Tamil Dubbed Movies Download</p>
+        <p>MoviesHub - Tamil & Tamil Dubbed Movies Download</p>
     </footer>
 
     <script src="app.js"></script>

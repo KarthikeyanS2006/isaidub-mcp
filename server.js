@@ -6,7 +6,11 @@ import path from 'path';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const BASE_URL = process.env.ISAIDUB_URL || "https://isaidub.love";
+
+const SOURCES = {
+  isaidub: process.env.ISAIDUB_URL || "https://isaidub.love",
+  moviesda: process.env.MOVIESDA_URL || "https://moviesda18.com"
+};
 
 app.use(cors());
 app.use(express.json());
@@ -40,7 +44,7 @@ async function getQualityPage(movieUrl, quality) {
     
     const origUrl = originalLink.href.startsWith("http") 
       ? originalLink.href 
-      : BASE_URL + originalLink.href;
+      : SOURCES.isaidub + originalLink.href;
     
     const { data: origData } = await axios.get(origUrl);
     const $orig = cheerio.load(origData);
@@ -52,7 +56,7 @@ async function getQualityPage(movieUrl, quality) {
     
     return qualityLink.href.startsWith("http") 
       ? qualityLink.href 
-      : BASE_URL + qualityLink.href;
+      : SOURCES.isaidub + qualityLink.href;
   } catch {
     return null;
   }
@@ -70,10 +74,10 @@ async function getDubmvPage(qualityPageUrl) {
     
     const dlUrl = downloadLink.href.startsWith("http") 
       ? downloadLink.href 
-      : BASE_URL + downloadLink.href;
+      : SOURCES.isaidub + downloadLink.href;
     
     const { data: dlData } = await axios.get(dlUrl, {
-      headers: { "Referer": BASE_URL + "/" }
+      headers: { "Referer": SOURCES.isaidub + "/" }
     });
     const $dl = cheerio.load(dlData);
     
@@ -83,7 +87,7 @@ async function getDubmvPage(qualityPageUrl) {
     if (!dubpageLink) return null;
     
     const { data: dubpageData } = await axios.get(dubpageLink.href, {
-      headers: { "Referer": BASE_URL + "/" }
+      headers: { "Referer": SOURCES.isaidub + "/" }
     });
     const $dubpage = cheerio.load(dubpageData);
     
@@ -135,9 +139,10 @@ async function getFinalLinks(dubmvUrl) {
   }
 }
 
-app.get('/api/movies', async (req, res) => {
+// ISAIDUB API - Tamil Dubbed Movies
+app.get('/api/isaidub/movies', async (req, res) => {
   const { url } = req.query;
-  const targetUrl = url || `${BASE_URL}/tamil-2026-dubbed-movies/`;
+  const targetUrl = url || `${SOURCES.isaidub}/tamil-2026-dubbed-movies/`;
   
   try {
     const { data } = await axios.get(targetUrl);
@@ -157,13 +162,13 @@ app.get('/api/movies', async (req, res) => {
         .replace(/-+/g, '-');
       
       if (year) {
-        thumbnail = `${BASE_URL}/uploads/posters/${nameForUrl}.jpg`;
+        thumbnail = `${SOURCES.isaidub}/uploads/posters/${nameForUrl}.jpg`;
       }
       
       if (href && title && !title.match(/^(Download|Tamil|Home|Contact|Check)/i)) {
         movies.push({
           title,
-          link: href.startsWith("http") ? href : BASE_URL + href,
+          link: href.startsWith("http") ? href : SOURCES.isaidub + href,
           thumbnail: thumbnail
         });
       }
@@ -175,7 +180,7 @@ app.get('/api/movies', async (req, res) => {
   }
 });
 
-app.get('/api/search', async (req, res) => {
+app.get('/api/isaidub/search', async (req, res) => {
   const { q } = req.query;
   
   if (!q) {
@@ -183,7 +188,7 @@ app.get('/api/search', async (req, res) => {
   }
   
   try {
-    const { data } = await axios.get(`${BASE_URL}/?s=${encodeURIComponent(q)}`);
+    const { data } = await axios.get(`${SOURCES.isaidub}/?s=${encodeURIComponent(q)}`);
     const $ = cheerio.load(data);
     const results = [];
 
@@ -200,13 +205,13 @@ app.get('/api/search', async (req, res) => {
         .replace(/-+/g, '-');
       
       if (year) {
-        thumbnail = `${BASE_URL}/uploads/posters/${nameForUrl}.jpg`;
+        thumbnail = `${SOURCES.isaidub}/uploads/posters/${nameForUrl}.jpg`;
       }
       
       if (href && title && !title.match(/^(Download|Tamil|Home|Contact|Check)/i)) {
         results.push({
           title,
-          link: href.startsWith("http") ? href : BASE_URL + href,
+          link: href.startsWith("http") ? href : SOURCES.isaidub + href,
           thumbnail: thumbnail
         });
       }
@@ -218,7 +223,7 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-app.get('/api/qualities', async (req, res) => {
+app.get('/api/isaidub/qualities', async (req, res) => {
   const { url } = req.query;
   
   if (!url) {
@@ -237,7 +242,7 @@ app.get('/api/qualities', async (req, res) => {
     
     const origUrl = originalLink.href.startsWith("http") 
       ? originalLink.href 
-      : BASE_URL + originalLink.href;
+      : SOURCES.isaidub + originalLink.href;
     
     const { data: origData } = await axios.get(origUrl);
     const $orig = cheerio.load(origData);
@@ -247,7 +252,7 @@ app.get('/api/qualities', async (req, res) => {
       .filter(l => l.text.match(/\d{3,4}p/i))
       .map(l => ({
         quality: l.text.match(/(\d{3,4}p)/i)?.[1] || l.text,
-        url: l.href.startsWith("http") ? l.href : BASE_URL + l.href
+        url: l.href.startsWith("http") ? l.href : SOURCES.isaidub + l.href
       }));
     
     res.json({ qualities });
@@ -256,7 +261,7 @@ app.get('/api/qualities', async (req, res) => {
   }
 });
 
-app.get('/api/download', async (req, res) => {
+app.get('/api/isaidub/download', async (req, res) => {
   const { url, quality } = req.query;
   
   if (!url) {
@@ -291,7 +296,7 @@ app.get('/api/download', async (req, res) => {
   }
 });
 
-app.get('/api/movie-details', async (req, res) => {
+app.get('/api/isaidub/details', async (req, res) => {
   const { url } = req.query;
   
   if (!url) {
@@ -319,7 +324,7 @@ app.get('/api/movie-details', async (req, res) => {
     
     const posterImg = $('ul.movie-info img').attr('src') || $('img[alt*="poster"]').attr('src') || $('picture img').attr('src');
     if (posterImg) {
-      details.thumbnail = posterImg.startsWith('http') ? posterImg : BASE_URL + posterImg;
+      details.thumbnail = posterImg.startsWith('http') ? posterImg : SOURCES.isaidub + posterImg;
     }
     
     $('ul.movie-info li').each((_, el) => {
@@ -353,6 +358,260 @@ app.get('/api/movie-details', async (req, res) => {
     }
     
     res.json(details);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// MOVIESDA API - Tamil Movies
+app.get('/api/moviesda/movies', async (req, res) => {
+  const { url } = req.query;
+  const targetUrl = url || `${SOURCES.moviesda}/tamil-2026-movies/`;
+  
+  try {
+    const { data } = await axios.get(targetUrl);
+    const $ = cheerio.load(data);
+    const movies = [];
+
+    $(".f a").each((_, el) => {
+      const href = $(el).attr("href");
+      const title = $(el).text().replace("[+]", "").trim();
+      
+      let thumbnail = null;
+      const yearMatch = title.match(/\((\d{4})\)/);
+      const year = yearMatch ? yearMatch[1] : '';
+      const nameForUrl = title.toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-');
+      
+      if (year) {
+        thumbnail = `${SOURCES.moviesda}/uploads/posters/${nameForUrl}.jpg`;
+      }
+      
+      if (href && title && !title.match(/^(Home|Download|Tamil)/i)) {
+        movies.push({
+          title,
+          link: href.startsWith("http") ? href : SOURCES.moviesda + href,
+          thumbnail: thumbnail
+        });
+      }
+    });
+
+    res.json(movies);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/moviesda/search', async (req, res) => {
+  const { q } = req.query;
+  
+  if (!q) {
+    return res.status(400).json({ error: "Query parameter 'q' is required" });
+  }
+  
+  try {
+    const { data } = await axios.get(`${SOURCES.moviesda}/?s=${encodeURIComponent(q)}`);
+    const $ = cheerio.load(data);
+    const results = [];
+
+    $(".f a").each((_, el) => {
+      const href = $(el).attr("href");
+      const title = $(el).text().replace("[+]", "").trim();
+      
+      let thumbnail = null;
+      const yearMatch = title.match(/\((\d{4})\)/);
+      const year = yearMatch ? yearMatch[1] : '';
+      const nameForUrl = title.toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-');
+      
+      if (year) {
+        thumbnail = `${SOURCES.moviesda}/uploads/posters/${nameForUrl}.jpg`;
+      }
+      
+      if (href && title && !title.match(/^(Home|Download|Tamil)/i)) {
+        results.push({
+          title,
+          link: href.startsWith("http") ? href : SOURCES.moviesda + href,
+          thumbnail: thumbnail
+        });
+      }
+    });
+
+    res.json(results);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/moviesda/details', async (req, res) => {
+  const { url } = req.query;
+  
+  if (!url) {
+    return res.status(400).json({ error: "URL parameter is required" });
+  }
+  
+  try {
+    const { data } = await axios.get(url);
+    const $ = cheerio.load(data);
+    
+    const details = {
+      title: '',
+      genres: '',
+      director: '',
+      starring: '',
+      quality: '',
+      language: 'Tamil',
+      rating: '',
+      updated: '',
+      synopsis: '',
+      thumbnail: null,
+      qualities: []
+    };
+    
+    details.title = $('title').text().split('(')[0].replace('Tamil Movie', '').trim() || $('h1').first().text().trim() || '';
+    
+    const posterImg = $('picture img').attr('src') || $('img[alt*="poster"]').attr('src');
+    if (posterImg) {
+      details.thumbnail = posterImg.startsWith('http') ? posterImg : SOURCES.moviesda + posterImg;
+    }
+    
+    $('ul.movie-info li').each((_, el) => {
+      const text = $(el).text();
+      if (text.includes('Director:')) {
+        details.director = $(el).find('span').text().trim();
+      }
+      if (text.includes('Starring:')) {
+        details.starring = $(el).find('span').text().trim();
+      }
+      if (text.includes('Genres:')) {
+        details.genres = $(el).find('span').text().trim();
+      }
+      if (text.includes('Quality:')) {
+        details.quality = $(el).find('span').text().trim();
+      }
+      if (text.includes('Movie Rating:')) {
+        details.rating = $(el).find('span').text().trim();
+      }
+      if (text.includes('Last Updated:')) {
+        details.updated = $(el).find('span').text().trim();
+      }
+    });
+    
+    const synopsisText = $('.movie-synopsis').text() || '';
+    if (synopsisText) {
+      details.synopsis = synopsisText.replace(/^Synopsis:\s*/i, '').trim();
+    }
+    
+    $(".f a").each((_, el) => {
+      const href = $(el).attr("href");
+      const text = $(el).text().trim();
+      if (href && text.match(/\d{3,4}p/i)) {
+        details.qualities.push({
+          quality: text.match(/(\d{3,4}p)/i)?.[1] || text,
+          url: href.startsWith("http") ? href : SOURCES.moviesda + href
+        });
+      }
+    });
+    
+    res.json(details);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/moviesda/qualities', async (req, res) => {
+  const { url } = req.query;
+  
+  if (!url) {
+    return res.status(400).json({ error: "URL parameter is required" });
+  }
+  
+  try {
+    const { data } = await axios.get(url);
+    const $ = cheerio.load(data);
+    const qualities = [];
+
+    $(".f a").each((_, el) => {
+      const href = $(el).attr("href");
+      const text = $(el).text().trim();
+      if (href && text.match(/\d{3,4}p/i)) {
+        qualities.push({
+          quality: text.match(/(\d{3,4}p)/i)?.[1] || text,
+          url: href.startsWith("http") ? href : SOURCES.moviesda + href
+        });
+      }
+    });
+
+    res.json({ qualities });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/moviesda/download', async (req, res) => {
+  const { url } = req.query;
+  
+  if (!url) {
+    return res.status(400).json({ error: "URL parameter is required" });
+  }
+  
+  try {
+    const { data } = await axios.get(url);
+    const $ = cheerio.load(data);
+    
+    const result = {
+      download: [],
+      watch: [],
+      info: {}
+    };
+    
+    $('div.dlink a').each((_, el) => {
+      const href = $(el).attr("href");
+      if (href) {
+        result.download.push({
+          server: "Direct Download",
+          url: href
+        });
+      }
+    });
+    
+    $('div.details').each((_, el) => {
+      const text = $(el).text().trim();
+      const parts = text.split(':');
+      if (parts.length >= 2) {
+        const key = parts[0].toLowerCase().replace(/ /g, '_');
+        result.info[key] = parts.slice(1).join(':').trim();
+      }
+    });
+    
+    const fileName = $('strong:contains("File Name")').parent().text().replace('File Name:', '').trim() ||
+                      $('div.details strong').first().text().trim() || '';
+    const fileSize = $('strong:contains("File Size")').parent().text().replace('File Size:', '').trim() || '';
+    const duration = $('strong:contains("Duration")').parent().text().replace('Duration:', '').trim() || '';
+    const resolution = $('strong:contains("Video Resolution")').parent().text().replace('Video Resolution:', '').trim() || '';
+    const format = $('strong:contains("Download Format")').parent().text().replace('Download Format:', '').trim() || 'Mp4';
+    
+    if (fileName) result.info.file_name = fileName;
+    if (fileSize) result.info.file_size = fileSize;
+    if (duration) result.info.duration = duration;
+    if (resolution) result.info.video_resolution = resolution;
+    if (format) result.info.format = format;
+    
+    const dlLink = $('a[href*="hotshare"]').attr('href');
+    if (dlLink) {
+      result.download = [{ server: "HotShare", url: dlLink }];
+    }
+    
+    const watchLink = $('a[href*="onestream"]').attr('href');
+    if (watchLink) {
+      result.watch = [{ server: "Onestream", url: watchLink }];
+    }
+    
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

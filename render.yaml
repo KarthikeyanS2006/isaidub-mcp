@@ -1,0 +1,8 @@
+{
+  "name": "sri-keyan-movies",
+  "buildCommand": "npm install",
+  "startCommand": "npm start",
+  "envVars": {
+    "NODE_ENV": "production"
+  }
+}

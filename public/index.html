@@ -8,9 +8,21 @@
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
+    <!-- Splash Screen -->
+    <div class="splash-screen" id="splashScreen">
+        <div class="splash-logo">
+            <div class="splash-s">S</div>
+            <div class="splash-k">K</div>
+        </div>
+        <div class="splash-text">Sri Keyan</div>
+        <div class="splash-loader">
+            <div class="loader-bar"></div>
+        </div>
+    </div>
+
     <nav class="navbar">
         <div class="nav-left">
-            <div class="logo">
+            <div class="logo" id="navLogo">
                 <span class="logo-s">S</span>
                 <span class="logo-ri">ri</span>
                 <span class="logo-k">K</span>
@@ -23,8 +35,13 @@
             </div>
         </div>
         <div class="nav-right">
-            <div class="search-container">
-                <input type="text" id="searchInput" placeholder="Titles, people, genres">
+            <button class="hamburger" id="hamburger">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <div class="search-container" id="searchContainer">
+                <input type="text" id="searchInput" placeholder="Search movies...">
                 <button id="searchBtn">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
                         <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
@@ -34,15 +51,13 @@
         </div>
     </nav>
 
-    <div class="tabs-container">
-        <div class="source-tabs">
-            <button class="source-tab active" data-source="isaidub">Tamil Dubbed</button>
-            <button class="source-tab" data-source="moviesda">Tamil Movies</button>
-        </div>
-        <div class="category-tabs">
-            <button class="cat-tab active" data-category="2026">2026</button>
-            <button class="cat-tab" data-category="2025">2025</button>
-            <button class="cat-tab" data-category="2024">2024</button>
+    <!-- Mobile Menu -->
+    <div class="mobile-menu" id="mobileMenu">
+        <a href="#" class="mobile-nav-link active">Home</a>
+        <a href="#" class="mobile-nav-link">Movies</a>
+        <a href="#" class="mobile-nav-link">New</a>
+        <div class="mobile-search">
+            <input type="text" id="mobileSearchInput" placeholder="Search movies...">
         </div>
     </div>
 
@@ -51,7 +66,6 @@
             <div class="hero-backdrop" id="heroBackdrop"></div>
             <div class="hero-gradient"></div>
             <div class="hero-content">
-                <div class="hero-logo" id="heroLogo"></div>
                 <h1 class="hero-title" id="heroTitle"></h1>
                 <p class="hero-description" id="heroDescription"></p>
                 <div class="hero-buttons">
@@ -81,6 +95,7 @@
                     </svg>
                 </button>
             </div>
+            <div class="hero-indicators" id="heroIndicators"></div>
         </section>
 
         <div id="loading" class="loading-overlay" style="display: none;">
@@ -90,7 +105,7 @@
         <section class="movies-section" id="moviesSection">
             <div class="movies-row">
                 <h2 class="row-title" id="rowTitle">Tamil Dubbed Movies 2026</h2>
-                <div class="movies-slider" id="moviesSlider">
+                <div class="movies-slider">
                     <div id="movieGrid" class="movie-grid"></div>
                 </div>
             </div>
@@ -114,6 +129,14 @@
                     <div class="modal-details">
                         <p id="modalDirector"></p>
                         <p id="modalStarring"></p>
+                    </div>
+                    <div class="modal-trailer-btn">
+                        <button class="btn-play-small" id="modalPlayTrailer">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                                <path d="M8 5v14l11-7z"/>
+                            </svg>
+                            Watch Trailer
+                        </button>
                     </div>
                 </div>
                 <div class="modal-right">

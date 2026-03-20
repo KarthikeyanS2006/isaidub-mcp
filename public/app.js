@@ -2,10 +2,12 @@ const API_BASE = window.location.origin;
 let currentSource = 'isaidub';
 let currentCategory = '2026';
 let currentMovieUrl = null;
+let currentMovieTitle = null;
 let heroMovies = [];
 let heroIndex = 0;
 let heroInterval = null;
 
+const splashScreen = document.getElementById('splashScreen');
 const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
 const movieGrid = document.getElementById('movieGrid');
@@ -15,15 +17,12 @@ const modalClose = document.getElementById('modalClose');
 const modalTitle = document.getElementById('modalTitle');
 const modalPoster = document.getElementById('modalPoster');
 const modalBackdrop = document.getElementById('modalBackdrop');
-const modalGenres = document.getElementById('modalGenres');
+const modalQuality = document.getElementById('modalQuality');
 const modalDirector = document.getElementById('modalDirector');
 const modalStarring = document.getElementById('modalStarring');
-const modalQuality = document.getElementById('modalQuality');
 const modalLanguage = document.getElementById('modalLanguage');
 const modalRating = document.getElementById('modalRating');
-const modalUpdated = document.getElementById('modalUpdated');
 const modalSynopsis = document.getElementById('modalSynopsis');
-const loadingDetails = document.getElementById('loadingDetails');
 const qualityOptions = document.getElementById('qualityOptions');
 const fileInfo = document.getElementById('fileInfo');
 const downloadLinks = document.getElementById('downloadLinks');
@@ -36,6 +35,7 @@ const heroSection = document.getElementById('heroSection');
 const heroBackdrop = document.getElementById('heroBackdrop');
 const heroTitle = document.getElementById('heroTitle');
 const heroDescription = document.getElementById('heroDescription');
+const heroIndicators = document.getElementById('heroIndicators');
 const playTrailerBtn = document.getElementById('playTrailerBtn');
 const moreInfoBtn = document.getElementById('moreInfoBtn');
 const sliderPrev = document.getElementById('sliderPrev');
@@ -43,6 +43,16 @@ const sliderNext = document.getElementById('sliderNext');
 const trailerModal = document.getElementById('trailerModal');
 const trailerFrame = document.getElementById('trailerFrame');
 const trailerClose = document.getElementById('trailerClose');
+const hamburger = document.getElementById('hamburger');
+const mobileMenu = document.getElementById('mobileMenu');
+const mobileSearchInput = document.getElementById('mobileSearchInput');
+const modalPlayTrailer = document.getElementById('modalPlayTrailer');
+
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        splashScreen.classList.add('hidden');
+    }, 4000);
+});
 
 async function fetchMovies() {
     showLoading(true);
@@ -60,6 +70,7 @@ async function fetchMovies() {
             movieGrid.innerHTML = '<p class="no-results">No movies found</p>';
         } else {
             heroMovies = movies.slice(0, 5);
+            createHeroIndicators();
             updateHeroSection(heroMovies[0]);
             startHeroSlideshow();
             
@@ -84,11 +95,40 @@ function updateRowTitle() {
     rowTitle.textContent = `${sourceName} ${currentCategory}`;
 }
 
+function createHeroIndicators() {
+    heroIndicators.innerHTML = '';
+    heroMovies.forEach((_, i) => {
+        const dot = document.createElement('div');
+        dot.className = `hero-indicator ${i === 0 ? 'active' : ''}`;
+        dot.addEventListener('click', () => goToHeroSlide(i));
+        heroIndicators.appendChild(dot);
+    });
+}
+
+function updateHeroIndicators() {
+    const dots = heroIndicators.querySelectorAll('.hero-indicator');
+    dots.forEach((dot, i) => {
+        dot.classList.toggle('active', i === heroIndex);
+    });
+}
+
+function goToHeroSlide(index) {
+    if (heroMovies.length === 0) return;
+    heroIndex = index;
+    heroBackdrop.style.opacity = '0';
+    setTimeout(() => {
+        updateHeroSection(heroMovies[heroIndex]);
+        heroBackdrop.style.opacity = '1';
+    }, 400);
+    updateHeroIndicators();
+    resetHeroSlideshow();
+}
+
 function updateHeroSection(movie) {
     if (!movie) return;
     
-    const movieName = movie.title.replace(/\s*\(\d{4}\)\s*/g, '').trim();
-    const searchQuery = encodeURIComponent(movieName + ' movie trailer');
+    currentMovieTitle = movie.title.replace(/\s*\(\d{4}\)\s*/g, '').trim();
+    const searchQuery = encodeURIComponent(currentMovieTitle + ' movie trailer');
     
     heroBackdrop.style.backgroundImage = movie.thumbnail 
         ? `url(${movie.thumbnail})` 
@@ -107,29 +147,40 @@ function startHeroSlideshow() {
     heroInterval = setInterval(() => {
         if (heroMovies.length > 1) {
             heroIndex = (heroIndex + 1) % heroMovies.length;
-            const movie = heroMovies[heroIndex];
             heroBackdrop.style.opacity = '0';
             setTimeout(() => {
-                updateHeroSection(movie);
+                updateHeroSection(heroMovies[heroIndex]);
                 heroBackdrop.style.opacity = '1';
-            }, 500);
+            }, 400);
+            updateHeroIndicators();
         }
-    }, 6000);
+    }, 7000);
+}
+
+function resetHeroSlideshow() {
+    if (heroInterval) {
+        clearInterval(heroInterval);
+        startHeroSlideshow();
+    }
 }
 
 async function playTrailer(query) {
     try {
+        loading.style.display = 'flex';
         const response = await fetch(`https://www.youtube.com/results?search_query=${query}`);
         const text = await response.text();
         const videoIdMatch = text.match(/"videoId":"([^"]+)"/);
+        
+        loading.style.display = 'none';
         
         if (videoIdMatch && videoIdMatch[1]) {
             trailerFrame.src = `https://www.youtube.com/embed/${videoIdMatch[1]}?autoplay=1`;
             trailerModal.classList.add('active');
         } else {
-            alert('Trailer not found');
+            alert('Trailer not found. Try searching on YouTube.');
         }
     } catch (error) {
+        loading.style.display = 'none';
         console.error('Trailer search error:', error);
         alert('Could not find trailer');
     }
@@ -155,6 +206,7 @@ async function searchMovies(query) {
             movieGrid.innerHTML = '<p class="no-results">No movies found for your search</p>';
         } else {
             heroMovies = movies.slice(0, 5);
+            createHeroIndicators();
             if (heroMovies.length > 0) {
                 updateHeroSection(heroMovies[0]);
             }
@@ -167,6 +219,8 @@ async function searchMovies(query) {
         
         const rowTitle = document.getElementById('rowTitle');
         rowTitle.textContent = `Search Results for "${query}"`;
+        
+        closeMobileMenu();
     } catch (error) {
         movieGrid.innerHTML = `<p class="error-msg">Error: ${error.message}</p>`;
     } finally {
@@ -178,26 +232,21 @@ function createMovieCard(movie) {
     const card = document.createElement('div');
     card.className = 'movie-card';
     const imgHtml = movie.thumbnail 
-        ? `<img src="${movie.thumbnail}" alt="${escapeHtml(movie.title)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">`
+        ? `<img src="${movie.thumbnail}" alt="${escapeHtml(movie.title)}" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">`
         : '';
     const emojiHtml = `<div class="movie-poster" style="display:${movie.thumbnail ? 'none' : 'flex'};">🎬</div>`;
     const overlayHtml = `
         <div class="movie-overlay">
             <span class="movie-badge">${currentSource === 'isaidub' ? 'Tamil Dubbed' : 'Tamil'}</span>
+            <h3 class="movie-title">${escapeHtml(movie.title)}</h3>
         </div>
     `;
-    card.innerHTML = `
-        ${imgHtml}
-        ${emojiHtml}
-        ${overlayHtml}
-    `;
+    card.innerHTML = `${imgHtml}${emojiHtml}${overlayHtml}`;
     card.addEventListener('click', () => openModal(movie));
     return card;
 }
 
 async function fetchMovieDetails(url) {
-    loadingDetails.style.display = 'flex';
-    
     try {
         const apiUrl = `${API_BASE}/api/${currentSource}/details?url=${encodeURIComponent(url)}`;
         const response = await fetch(apiUrl);
@@ -205,26 +254,24 @@ async function fetchMovieDetails(url) {
         
         if (details.title) {
             modalTitle.textContent = details.title;
+            currentMovieTitle = details.title.replace(/\s*\(\d{4}\)\s*/g, '').trim();
         }
         
         if (details.thumbnail) {
             modalPoster.style.backgroundImage = `url(${details.thumbnail})`;
-            modalPoster.style.backgroundSize = 'cover';
-            modalPoster.style.backgroundPosition = 'center';
             modalBackdrop.style.backgroundImage = `url(${details.thumbnail})`;
         }
         
-        modalGenres.textContent = details.genres || '';
-        modalGenres.style.display = details.genres ? 'inline-block' : 'none';
+        modalQuality.textContent = details.quality || '';
+        modalQuality.style.display = details.quality ? 'inline-block' : 'none';
+        modalLanguage.textContent = details.language || 'Tamil';
+        modalRating.textContent = details.rating ? `⭐ ${details.rating}` : '';
+        modalRating.style.display = details.rating ? 'inline-block' : 'none';
         modalDirector.innerHTML = details.director ? `<strong>Director:</strong> ${details.director}` : '';
         modalStarring.innerHTML = details.starring ? `<strong>Starring:</strong> ${details.starring}` : '';
-        modalQuality.innerHTML = details.quality ? details.quality : '';
-        modalQuality.style.display = details.quality ? 'inline-block' : 'none';
-        modalLanguage.innerHTML = details.language || 'Tamil';
-        modalRating.innerHTML = details.rating ? details.rating : '';
-        modalRating.style.display = details.rating ? 'inline-block' : 'none';
-        modalUpdated.innerHTML = details.updated ? `<strong>Updated:</strong> ${details.updated}` : '';
         modalSynopsis.textContent = details.synopsis || '';
+        
+        modalPlayTrailer.onclick = () => playTrailer(encodeURIComponent(currentMovieTitle + ' movie trailer'));
         
         if (currentSource === 'isaidub') {
             renderISAIDUBQualities(url);
@@ -234,8 +281,7 @@ async function fetchMovieDetails(url) {
         
     } catch (error) {
         console.error('Error fetching details:', error);
-    } finally {
-        loadingDetails.style.display = 'none';
+        qualityOptions.innerHTML = '<p style="color:#b3b3b3;">Error loading details</p>';
     }
 }
 
@@ -258,8 +304,8 @@ function renderISAIDUBQualities(movieUrl) {
 }
 
 function renderMoviesdaQualities(qualities) {
-    if (qualities.length === 0) {
-        qualityOptions.innerHTML = '<p style="color:#b3b3b3;text-align:center;">No qualities available</p>';
+    if (!qualities || qualities.length === 0) {
+        qualityOptions.innerHTML = '<p style="color:#b3b3b3;">No qualities available</p>';
         return;
     }
     
@@ -275,9 +321,7 @@ function renderMoviesdaQualities(qualities) {
         });
     });
     
-    if (qualities.length > 0) {
-        fetchMoviesdaDownloadLinks(qualities[0].url);
-    }
+    fetchMoviesdaDownloadLinks(qualities[0].url);
 }
 
 async function fetchISAIDUBDownloadLinks(url, quality) {
@@ -375,27 +419,25 @@ function openModal(movie) {
     
     if (movie.thumbnail) {
         modalPoster.style.backgroundImage = `url(${movie.thumbnail})`;
-        modalPoster.style.backgroundSize = 'cover';
         modalBackdrop.style.backgroundImage = `url(${movie.thumbnail})`;
     }
     
-    modalGenres.textContent = '';
-    modalDirector.innerHTML = '';
-    modalStarring.innerHTML = '';
     modalQuality.innerHTML = '';
     modalQuality.style.display = 'none';
     modalRating.innerHTML = '';
     modalRating.style.display = 'none';
-    modalUpdated.innerHTML = '';
+    modalDirector.innerHTML = '';
+    modalStarring.innerHTML = '';
     modalSynopsis.textContent = '';
-    qualityOptions.innerHTML = '<p style="color:#b3b3b3;">Loading qualities...</p>';
+    qualityOptions.innerHTML = '<p style="color:#b3b3b3;">Loading...</p>';
     fileInfo.style.display = 'none';
     downloadLinks.innerHTML = '';
-    loadingDetails.style.display = 'flex';
+    loadingLinks.style.display = 'flex';
     
     modal.classList.add('active');
     document.body.style.overflow = 'hidden';
     
+    closeMobileMenu();
     fetchMovieDetails(movie.link);
 }
 
@@ -419,11 +461,21 @@ function escapeHtml(text) {
 
 function slideMovies(direction) {
     const grid = movieGrid;
-    const scrollAmount = 220;
+    const scrollAmount = 230;
     grid.scrollBy({
         left: direction * scrollAmount,
         behavior: 'smooth'
     });
+}
+
+function toggleMobileMenu() {
+    hamburger.classList.toggle('active');
+    mobileMenu.classList.toggle('active');
+}
+
+function closeMobileMenu() {
+    hamburger.classList.remove('active');
+    mobileMenu.classList.remove('active');
 }
 
 if (searchBtn) {
@@ -440,6 +492,22 @@ if (searchInput) {
     });
 }
 
+if (hamburger) {
+    hamburger.addEventListener('click', toggleMobileMenu);
+}
+
+if (mobileSearchInput) {
+    mobileSearchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            searchMovies(mobileSearchInput.value);
+        }
+    });
+}
+
+document.querySelectorAll('.mobile-nav-link').forEach(link => {
+    link.addEventListener('click', closeMobileMenu);
+});
+
 tabs.forEach(tab => {
     tab.addEventListener('click', () => {
         tabs.forEach(t => t.classList.remove('active'));
@@ -447,8 +515,10 @@ tabs.forEach(tab => {
         tab.classList.add('active');
         document.querySelector(`.cat-tab[data-category="${currentCategory}"]`)?.classList.add('active');
         currentSource = tab.dataset.source;
-        searchInput.value = '';
+        if (searchInput) searchInput.value = '';
+        if (mobileSearchInput) mobileSearchInput.value = '';
         fetchMovies();
+        closeMobileMenu();
     });
 });
 
@@ -457,8 +527,10 @@ catTabs.forEach(tab => {
         catTabs.forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         currentCategory = tab.dataset.category;
-        searchInput.value = '';
+        if (searchInput) searchInput.value = '';
+        if (mobileSearchInput) mobileSearchInput.value = '';
         fetchMovies();
+        closeMobileMenu();
     });
 });
 

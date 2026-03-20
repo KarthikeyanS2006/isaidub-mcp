@@ -148,11 +148,23 @@ app.get('/api/movies', async (req, res) => {
       const href = $(el).attr("href");
       const title = $(el).text().replace("[+]", "").trim();
       
+      let thumbnail = null;
+      const yearMatch = title.match(/\((\d{4})\)/);
+      const year = yearMatch ? yearMatch[1] : '';
+      const nameForUrl = title.toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-');
+      
+      if (year) {
+        thumbnail = `${BASE_URL}/uploads/posters/${nameForUrl}.jpg`;
+      }
+      
       if (href && title && !title.match(/^(Download|Tamil|Home|Contact|Check)/i)) {
         movies.push({
           title,
           link: href.startsWith("http") ? href : BASE_URL + href,
-          thumbnail: null
+          thumbnail: thumbnail
         });
       }
     });
@@ -179,11 +191,23 @@ app.get('/api/search', async (req, res) => {
       const href = $(el).attr("href");
       const title = $(el).text().replace("[+]", "").trim();
       
+      let thumbnail = null;
+      const yearMatch = title.match(/\((\d{4})\)/);
+      const year = yearMatch ? yearMatch[1] : '';
+      const nameForUrl = title.toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-');
+      
+      if (year) {
+        thumbnail = `${BASE_URL}/uploads/posters/${nameForUrl}.jpg`;
+      }
+      
       if (href && title && !title.match(/^(Download|Tamil|Home|Contact|Check)/i)) {
         results.push({
           title,
           link: href.startsWith("http") ? href : BASE_URL + href,
-          thumbnail: null
+          thumbnail: thumbnail
         });
       }
     });

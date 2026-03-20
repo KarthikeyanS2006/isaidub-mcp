@@ -150,6 +150,49 @@ function updateMotionButtons() {
     });
 }
 
+async function checkApiStatus() {
+    const isaidubStatus = document.getElementById('isaidub-status');
+    const moviesdaStatus = document.getElementById('moviesda-status');
+    
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        
+        const response = await fetch(`${API_BASE}/api/isaidub/movies?category=2026`, {
+            signal: controller.signal
+        });
+        clearTimeout(timeout);
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (Array.isArray(data) && data.length > 0) {
+                isaidubStatus?.classList.remove('offline');
+            }
+        }
+    } catch {
+        isaidubStatus?.classList.add('offline');
+    }
+    
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        
+        const response = await fetch(`${API_BASE}/api/moviesda/movies?category=2026`, {
+            signal: controller.signal
+        });
+        clearTimeout(timeout);
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (Array.isArray(data) && data.length > 0) {
+                moviesdaStatus?.classList.remove('offline');
+            }
+        }
+    } catch {
+        moviesdaStatus?.classList.add('offline');
+    }
+}
+
 window.addEventListener('load', () => {
     reduceMotion = Storage.getReduceMotion();
     document.body.classList.toggle('reduce-motion', reduceMotion);
@@ -166,6 +209,8 @@ window.addEventListener('load', () => {
     setTimeout(() => {
         splashScreen.classList.add('hidden');
     }, 4000);
+    
+    checkApiStatus();
 });
 
 async function fetchMovies() {

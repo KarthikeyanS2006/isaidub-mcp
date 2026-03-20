@@ -1757,6 +1757,32 @@ body.reduce-motion .splash-k {
     gap: 10px;
 }
 
+/* Status Dot */
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #46d369;
+    display: inline-block;
+    margin-right: 6px;
+    animation: pulse 2s infinite;
+}
+
+.status-dot.offline {
+    background: #e50914;
+    animation: none;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.source-tab {
+    display: flex;
+    align-items: center;
+}
+
 @media (max-width: 768px) {
     .type-tabs {
         margin-bottom: 10px;

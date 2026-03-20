@@ -90,27 +90,38 @@ async function fetchMovies() {
 function createMovieRows(movies) {
     moviesSection.innerHTML = '';
     
-    const allRow = createRow('Latest Movies', movies, 'all');
+    const allRow = createRow('All Results', movies, 'all');
     moviesSection.appendChild(allRow);
+    
+    const isaidubMovies = movies.filter(m => m.source === 'isaidub');
+    const moviesdaMovies = movies.filter(m => m.source === 'moviesda');
+    
+    if (isaidubMovies.length >= 5) {
+        moviesSection.appendChild(createRow('Tamil Dubbed (ISAIDUB)', isaidubMovies, 'isaidub'));
+    }
+    
+    if (moviesdaMovies.length >= 5) {
+        moviesSection.appendChild(createRow('Tamil Movies (Moviesda)', moviesdaMovies, 'moviesda'));
+    }
     
     const shuffled = [...movies].sort(() => Math.random() - 0.5);
     const actionMovies = shuffled.filter(m => 
-        m.title.toLowerCase().match(/action|war|battle|fight|superhero|army/) || 
+        m.title.toLowerCase().match(/action|war|battle|fight|superhero|army|martial|kick|punch/) || 
         Math.random() > 0.6
     ).slice(0, 15);
     
     const horrorMovies = shuffled.filter(m => 
-        m.title.toLowerCase().match(/horror|ghost|devil|nightmare|evil|haunted|curse/) ||
+        m.title.toLowerCase().match(/horror|ghost|devil|nightmare|evil|haunted|curse|dead|undead/) ||
         Math.random() > 0.7
     ).slice(0, 15);
     
     const comedyMovies = shuffled.filter(m => 
-        m.title.toLowerCase().match(/comedy|fun|funny|party|hilarious/) ||
+        m.title.toLowerCase().match(/comedy|fun|funny|party|hilarious|laugh/) ||
         Math.random() > 0.65
     ).slice(0, 15);
     
     const dramaMovies = shuffled.filter(m => 
-        m.title.toLowerCase().match(/drama|family|emotion|heart|sad/) ||
+        m.title.toLowerCase().match(/drama|family|emotion|heart|sad|love|romance/) ||
         Math.random() > 0.65
     ).slice(0, 15);
     
@@ -315,21 +326,30 @@ async function searchMovies(query) {
     showLoading(true);
     
     try {
-        const url = `${API_BASE}/api/${currentSource}/search?q=${encodeURIComponent(query)}`;
-        const response = await fetch(url);
-        const movies = await response.json();
+        const [isaidubRes, moviesdaRes] = await Promise.all([
+            fetch(`${API_BASE}/api/isaidub/search?q=${encodeURIComponent(query)}`),
+            fetch(`${API_BASE}/api/moviesda/search?q=${encodeURIComponent(query)}`)
+        ]);
         
-        if (movies.length === 0) {
+        const isaidubMovies = await isaidubRes.json();
+        const moviesdaMovies = await moviesdaRes.json();
+        
+        const combinedMovies = [
+            ...isaidubMovies.map(m => ({ ...m, source: 'isaidub' })),
+            ...moviesdaMovies.map(m => ({ ...m, source: 'moviesda' }))
+        ];
+        
+        if (combinedMovies.length === 0) {
             moviesSection.innerHTML = '<p style="text-align:center;color:#b3b3b3;padding:50px;">No movies found for your search</p>';
         } else {
-            allMovies = movies;
-            heroMovies = movies.slice(0, 5);
+            allMovies = combinedMovies;
+            heroMovies = combinedMovies.slice(0, 5);
             createHeroIndicators();
             if (heroMovies.length > 0) {
                 updateHeroSection(heroMovies[0]);
             }
             
-            createMovieRows(movies);
+            createMovieRows(combinedMovies);
         }
         
         closeMobileMenu();
@@ -347,9 +367,10 @@ function createMovieCard(movie) {
         ? `<img src="${movie.thumbnail}" alt="${escapeHtml(movie.title)}" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">`
         : '';
     const emojiHtml = `<div class="movie-poster" style="display:${movie.thumbnail ? 'none' : 'flex'};">🎬</div>`;
+    const sourceBadge = movie.source === 'moviesda' ? 'Tamil' : 'Tamil Dubbed';
     const overlayHtml = `
         <div class="movie-overlay">
-            <span class="movie-badge">${currentSource === 'isaidub' ? 'Tamil Dubbed' : 'Tamil'}</span>
+            <span class="movie-badge">${sourceBadge}</span>
             <h3 class="movie-title">${escapeHtml(movie.title)}</h3>
         </div>
     `;
@@ -608,8 +629,46 @@ if (mobileSearchInput) {
 }
 
 document.querySelectorAll('.mobile-nav-link').forEach(link => {
-    link.addEventListener('click', closeMobileMenu);
+    link.addEventListener('click', (e) => {
+        e.preventDefault();
+        closeMobileMenu();
+    });
 });
+
+const homeLink = document.getElementById('homeLink');
+const mobileHomeLink = document.getElementById('mobileHomeLink');
+
+function goHome() {
+    currentSource = 'isaidub';
+    currentCategory = '2026';
+    
+    tabs.forEach(t => t.classList.remove('active'));
+    document.querySelector('.source-tab[data-source="isaidub"]')?.classList.add('active');
+    
+    catTabs.forEach(t => t.classList.remove('active'));
+    document.querySelector('.cat-tab[data-category="2026"]')?.classList.add('active');
+    
+    if (searchInput) searchInput.value = '';
+    if (mobileSearchInput) mobileSearchInput.value = '';
+    
+    fetchMovies();
+    closeMobileMenu();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+if (homeLink) {
+    homeLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        goHome();
+    });
+}
+
+if (mobileHomeLink) {
+    mobileHomeLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        goHome();
+    });
+}
 
 tabs.forEach(tab => {
     tab.addEventListener('click', () => {

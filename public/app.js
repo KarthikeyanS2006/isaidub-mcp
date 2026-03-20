@@ -2,15 +2,19 @@ const API_BASE = window.location.origin;
 let currentSource = 'isaidub';
 let currentCategory = '2026';
 let currentMovieUrl = null;
+let heroMovies = [];
+let heroIndex = 0;
+let heroInterval = null;
 
 const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
 const movieGrid = document.getElementById('movieGrid');
 const loading = document.getElementById('loading');
 const modal = document.getElementById('movieModal');
-const closeModal = document.querySelector('.close');
+const modalClose = document.getElementById('modalClose');
 const modalTitle = document.getElementById('modalTitle');
 const modalPoster = document.getElementById('modalPoster');
+const modalBackdrop = document.getElementById('modalBackdrop');
 const modalGenres = document.getElementById('modalGenres');
 const modalDirector = document.getElementById('modalDirector');
 const modalStarring = document.getElementById('modalStarring');
@@ -24,22 +28,21 @@ const qualityOptions = document.getElementById('qualityOptions');
 const fileInfo = document.getElementById('fileInfo');
 const downloadLinks = document.getElementById('downloadLinks');
 const loadingLinks = document.getElementById('loadingLinks');
-const tabs = document.querySelectorAll('.tab');
+const tabs = document.querySelectorAll('.source-tab');
 const catTabs = document.querySelectorAll('.cat-tab');
-const categoryTabs = document.getElementById('categoryTabs');
 
-const categoryUrls = {
-    isaidub: {
-        '2026': '/tamil-2026-dubbed-movies/',
-        '2025': '/tamil-2025-dubbed-movies/',
-        '2024': '/tamil-2024-dubbed-movies/'
-    },
-    moviesda: {
-        '2026': '/tamil-2026-movies/',
-        '2025': '/tamil-2025-movies/',
-        '2024': '/tamil-2024-movies/'
-    }
-};
+const navbar = document.querySelector('.navbar');
+const heroSection = document.getElementById('heroSection');
+const heroBackdrop = document.getElementById('heroBackdrop');
+const heroTitle = document.getElementById('heroTitle');
+const heroDescription = document.getElementById('heroDescription');
+const playTrailerBtn = document.getElementById('playTrailerBtn');
+const moreInfoBtn = document.getElementById('moreInfoBtn');
+const sliderPrev = document.getElementById('sliderPrev');
+const sliderNext = document.getElementById('sliderNext');
+const trailerModal = document.getElementById('trailerModal');
+const trailerFrame = document.getElementById('trailerFrame');
+const trailerClose = document.getElementById('trailerClose');
 
 async function fetchMovies() {
     showLoading(true);
@@ -56,16 +59,85 @@ async function fetchMovies() {
         if (movies.length === 0) {
             movieGrid.innerHTML = '<p class="no-results">No movies found</p>';
         } else {
+            heroMovies = movies.slice(0, 5);
+            updateHeroSection(heroMovies[0]);
+            startHeroSlideshow();
+            
             movies.forEach(movie => {
                 const card = createMovieCard(movie);
                 movieGrid.appendChild(card);
             });
         }
+        
+        updateRowTitle();
     } catch (error) {
         movieGrid.innerHTML = `<p class="error-msg">Error: ${error.message}</p>`;
+        console.error('Fetch error:', error);
     } finally {
         showLoading(false);
     }
+}
+
+function updateRowTitle() {
+    const rowTitle = document.getElementById('rowTitle');
+    const sourceName = currentSource === 'isaidub' ? 'Tamil Dubbed' : 'Tamil Movies';
+    rowTitle.textContent = `${sourceName} ${currentCategory}`;
+}
+
+function updateHeroSection(movie) {
+    if (!movie) return;
+    
+    const movieName = movie.title.replace(/\s*\(\d{4}\)\s*/g, '').trim();
+    const searchQuery = encodeURIComponent(movieName + ' movie trailer');
+    
+    heroBackdrop.style.backgroundImage = movie.thumbnail 
+        ? `url(${movie.thumbnail})` 
+        : 'linear-gradient(135deg, #1f1f1f, #141414)';
+    
+    heroTitle.textContent = movie.title;
+    heroDescription.textContent = 'Watch and download the latest Tamil dubbed movies in HD quality. Direct download links available.';
+    
+    playTrailerBtn.onclick = () => playTrailer(searchQuery);
+    moreInfoBtn.onclick = () => openModal(movie);
+}
+
+function startHeroSlideshow() {
+    if (heroInterval) clearInterval(heroInterval);
+    
+    heroInterval = setInterval(() => {
+        if (heroMovies.length > 1) {
+            heroIndex = (heroIndex + 1) % heroMovies.length;
+            const movie = heroMovies[heroIndex];
+            heroBackdrop.style.opacity = '0';
+            setTimeout(() => {
+                updateHeroSection(movie);
+                heroBackdrop.style.opacity = '1';
+            }, 500);
+        }
+    }, 6000);
+}
+
+async function playTrailer(query) {
+    try {
+        const response = await fetch(`https://www.youtube.com/results?search_query=${query}`);
+        const text = await response.text();
+        const videoIdMatch = text.match(/"videoId":"([^"]+)"/);
+        
+        if (videoIdMatch && videoIdMatch[1]) {
+            trailerFrame.src = `https://www.youtube.com/embed/${videoIdMatch[1]}?autoplay=1`;
+            trailerModal.classList.add('active');
+        } else {
+            alert('Trailer not found');
+        }
+    } catch (error) {
+        console.error('Trailer search error:', error);
+        alert('Could not find trailer');
+    }
+}
+
+function closeTrailerModal() {
+    trailerFrame.src = '';
+    trailerModal.classList.remove('active');
 }
 
 async function searchMovies(query) {
@@ -82,11 +154,19 @@ async function searchMovies(query) {
         if (movies.length === 0) {
             movieGrid.innerHTML = '<p class="no-results">No movies found for your search</p>';
         } else {
+            heroMovies = movies.slice(0, 5);
+            if (heroMovies.length > 0) {
+                updateHeroSection(heroMovies[0]);
+            }
+            
             movies.forEach(movie => {
                 const card = createMovieCard(movie);
                 movieGrid.appendChild(card);
             });
         }
+        
+        const rowTitle = document.getElementById('rowTitle');
+        rowTitle.textContent = `Search Results for "${query}"`;
     } catch (error) {
         movieGrid.innerHTML = `<p class="error-msg">Error: ${error.message}</p>`;
     } finally {
@@ -101,19 +181,22 @@ function createMovieCard(movie) {
         ? `<img src="${movie.thumbnail}" alt="${escapeHtml(movie.title)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">`
         : '';
     const emojiHtml = `<div class="movie-poster" style="display:${movie.thumbnail ? 'none' : 'flex'};">🎬</div>`;
+    const overlayHtml = `
+        <div class="movie-overlay">
+            <span class="movie-badge">${currentSource === 'isaidub' ? 'Tamil Dubbed' : 'Tamil'}</span>
+        </div>
+    `;
     card.innerHTML = `
         ${imgHtml}
         ${emojiHtml}
-        <div class="movie-info">
-            <h3 class="movie-title">${escapeHtml(movie.title)}</h3>
-        </div>
+        ${overlayHtml}
     `;
     card.addEventListener('click', () => openModal(movie));
     return card;
 }
 
 async function fetchMovieDetails(url) {
-    loadingDetails.style.display = 'block';
+    loadingDetails.style.display = 'flex';
     
     try {
         const apiUrl = `${API_BASE}/api/${currentSource}/details?url=${encodeURIComponent(url)}`;
@@ -125,17 +208,21 @@ async function fetchMovieDetails(url) {
         }
         
         if (details.thumbnail) {
-            modalPoster.src = details.thumbnail;
-            modalPoster.style.display = 'block';
+            modalPoster.style.backgroundImage = `url(${details.thumbnail})`;
+            modalPoster.style.backgroundSize = 'cover';
+            modalPoster.style.backgroundPosition = 'center';
+            modalBackdrop.style.backgroundImage = `url(${details.thumbnail})`;
         }
         
         modalGenres.textContent = details.genres || '';
         modalGenres.style.display = details.genres ? 'inline-block' : 'none';
         modalDirector.innerHTML = details.director ? `<strong>Director:</strong> ${details.director}` : '';
         modalStarring.innerHTML = details.starring ? `<strong>Starring:</strong> ${details.starring}` : '';
-        modalQuality.innerHTML = details.quality ? `<strong>Quality:</strong> ${details.quality}` : '';
-        modalLanguage.innerHTML = details.language ? `<strong>Language:</strong> ${details.language}` : '';
-        modalRating.innerHTML = details.rating ? `<strong>Rating:</strong> ${details.rating}` : '';
+        modalQuality.innerHTML = details.quality ? details.quality : '';
+        modalQuality.style.display = details.quality ? 'inline-block' : 'none';
+        modalLanguage.innerHTML = details.language || 'Tamil';
+        modalRating.innerHTML = details.rating ? details.rating : '';
+        modalRating.style.display = details.rating ? 'inline-block' : 'none';
         modalUpdated.innerHTML = details.updated ? `<strong>Updated:</strong> ${details.updated}` : '';
         modalSynopsis.textContent = details.synopsis || '';
         
@@ -166,11 +253,13 @@ function renderISAIDUBQualities(movieUrl) {
             fetchISAIDUBDownloadLinks(movieUrl, btn.dataset.quality);
         });
     });
+    
+    fetchISAIDUBDownloadLinks(movieUrl, '720p');
 }
 
 function renderMoviesdaQualities(qualities) {
     if (qualities.length === 0) {
-        qualityOptions.innerHTML = '<p style="color:#666;text-align:center;">No qualities available</p>';
+        qualityOptions.innerHTML = '<p style="color:#b3b3b3;text-align:center;">No qualities available</p>';
         return;
     }
     
@@ -192,7 +281,7 @@ function renderMoviesdaQualities(qualities) {
 }
 
 async function fetchISAIDUBDownloadLinks(url, quality) {
-    loadingLinks.style.display = 'block';
+    loadingLinks.style.display = 'flex';
     downloadLinks.innerHTML = '';
     fileInfo.style.display = 'none';
     
@@ -202,22 +291,21 @@ async function fetchISAIDUBDownloadLinks(url, quality) {
         
         if (data.error) {
             downloadLinks.innerHTML = `<p class="error-msg">${data.error}</p>`;
+            loadingLinks.style.display = 'none';
             return;
         }
         
         let html = '';
         
         if (data.download && data.download.length > 0) {
-            html += '<h3 style="margin: 15px 0 10px;color:#c2185b;">Download Links</h3>';
             data.download.forEach(link => {
                 html += `<a href="${link.url}" target="_blank" class="download-btn">${link.server} - Download</a>`;
             });
         }
         
         if (data.watch && data.watch.length > 0) {
-            html += '<h3 style="margin: 15px 0 10px;color:#c2185b;">Watch Online</h3>';
             data.watch.forEach(link => {
-                html += `<a href="${link.url}" target="_blank" class="watch-btn">${link.server} - Watch</a>`;
+                html += `<a href="${link.url}" target="_blank" class="watch-btn">${link.server} - Watch Online</a>`;
             });
         }
         
@@ -234,7 +322,7 @@ async function fetchISAIDUBDownloadLinks(url, quality) {
 }
 
 async function fetchMoviesdaDownloadLinks(url) {
-    loadingLinks.style.display = 'block';
+    loadingLinks.style.display = 'flex';
     downloadLinks.innerHTML = '';
     fileInfo.style.display = 'none';
     
@@ -243,15 +331,16 @@ async function fetchMoviesdaDownloadLinks(url) {
         const data = await response.json();
         
         if (data.info && Object.keys(data.info).length > 0) {
-            let infoHtml = '<div class="file-info">';
+            let infoHtml = '';
             if (data.info.file_name) infoHtml += `<p><strong>File:</strong> ${data.info.file_name}</p>`;
             if (data.info.file_size) infoHtml += `<p><strong>Size:</strong> ${data.info.file_size}</p>`;
             if (data.info.duration) infoHtml += `<p><strong>Duration:</strong> ${data.info.duration}</p>`;
             if (data.info.video_resolution) infoHtml += `<p><strong>Resolution:</strong> ${data.info.video_resolution}</p>`;
             if (data.info.format) infoHtml += `<p><strong>Format:</strong> ${data.info.format}</p>`;
-            infoHtml += '</div>';
-            fileInfo.innerHTML = infoHtml;
-            fileInfo.style.display = 'block';
+            if (infoHtml) {
+                fileInfo.innerHTML = infoHtml;
+                fileInfo.style.display = 'block';
+            }
         }
         
         let html = '';
@@ -283,34 +372,43 @@ async function fetchMoviesdaDownloadLinks(url) {
 function openModal(movie) {
     currentMovieUrl = movie.link;
     modalTitle.textContent = movie.title;
-    modalPoster.src = movie.thumbnail || '';
-    modalPoster.style.display = movie.thumbnail ? 'block' : 'none';
+    
+    if (movie.thumbnail) {
+        modalPoster.style.backgroundImage = `url(${movie.thumbnail})`;
+        modalPoster.style.backgroundSize = 'cover';
+        modalBackdrop.style.backgroundImage = `url(${movie.thumbnail})`;
+    }
+    
     modalGenres.textContent = '';
     modalDirector.innerHTML = '';
     modalStarring.innerHTML = '';
     modalQuality.innerHTML = '';
-    modalLanguage.innerHTML = '';
+    modalQuality.style.display = 'none';
     modalRating.innerHTML = '';
+    modalRating.style.display = 'none';
     modalUpdated.innerHTML = '';
     modalSynopsis.textContent = '';
-    qualityOptions.innerHTML = '';
+    qualityOptions.innerHTML = '<p style="color:#b3b3b3;">Loading qualities...</p>';
     fileInfo.style.display = 'none';
-    downloadLinks.innerHTML = '<p style="text-align:center;color:#888;">Loading qualities...</p>';
+    downloadLinks.innerHTML = '';
+    loadingDetails.style.display = 'flex';
     
-    modal.style.display = 'block';
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
     
     fetchMovieDetails(movie.link);
 }
 
 function closeModalHandler() {
-    modal.style.display = 'none';
+    modal.classList.remove('active');
+    document.body.style.overflow = '';
     currentMovieUrl = null;
     downloadLinks.innerHTML = '';
     loadingLinks.style.display = 'none';
 }
 
 function showLoading(show) {
-    loading.style.display = show ? 'block' : 'none';
+    loading.style.display = show ? 'flex' : 'none';
 }
 
 function escapeHtml(text) {
@@ -319,20 +417,35 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-searchBtn.addEventListener('click', () => {
-    searchMovies(searchInput.value);
-});
+function slideMovies(direction) {
+    const grid = movieGrid;
+    const scrollAmount = 220;
+    grid.scrollBy({
+        left: direction * scrollAmount,
+        behavior: 'smooth'
+    });
+}
 
-searchInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
+if (searchBtn) {
+    searchBtn.addEventListener('click', () => {
         searchMovies(searchInput.value);
-    }
-});
+    });
+}
+
+if (searchInput) {
+    searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            searchMovies(searchInput.value);
+        }
+    });
+}
 
 tabs.forEach(tab => {
     tab.addEventListener('click', () => {
         tabs.forEach(t => t.classList.remove('active'));
+        catTabs.forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
+        document.querySelector(`.cat-tab[data-category="${currentCategory}"]`)?.classList.add('active');
         currentSource = tab.dataset.source;
         searchInput.value = '';
         fetchMovies();
@@ -349,17 +462,55 @@ catTabs.forEach(tab => {
     });
 });
 
-closeModal.addEventListener('click', closeModalHandler);
+if (modalClose) {
+    modalClose.addEventListener('click', closeModalHandler);
+}
 
-window.addEventListener('click', (e) => {
-    if (e.target === modal) {
-        closeModalHandler();
+if (modal) {
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeModalHandler();
+        }
+    });
+}
+
+if (trailerClose) {
+    trailerClose.addEventListener('click', closeTrailerModal);
+}
+
+if (trailerModal) {
+    trailerModal.addEventListener('click', (e) => {
+        if (e.target === trailerModal) {
+            closeTrailerModal();
+        }
+    });
+}
+
+if (sliderPrev) {
+    sliderPrev.addEventListener('click', () => slideMovies(-1));
+}
+
+if (sliderNext) {
+    sliderNext.addEventListener('click', () => slideMovies(1));
+}
+
+window.addEventListener('scroll', () => {
+    if (navbar) {
+        if (window.scrollY > 50) {
+            navbar.classList.add('scrolled');
+        } else {
+            navbar.classList.remove('scrolled');
+        }
     }
 });
 
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-        closeModalHandler();
+        if (trailerModal && trailerModal.classList.contains('active')) {
+            closeTrailerModal();
+        } else if (modal && modal.classList.contains('active')) {
+            closeModalHandler();
+        }
     }
 });
 

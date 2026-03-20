@@ -571,15 +571,9 @@ app.get('/api/moviesda/qualities', async (req, res) => {
   }
 });
 
-app.get('/api/moviesda/download', async (req, res) => {
-  const { url } = req.query;
-  
-  if (!url) {
-    return res.status(400).json({ error: "URL parameter is required" });
-  }
-  
+async function getMoviesdaDirectLinks(downloadPageUrl) {
   try {
-    const { data } = await axios.get(url, axiosConfig);
+    const { data } = await axios.get(downloadPageUrl, axiosConfig);
     const $ = cheerio.load(data);
     
     const result = {
@@ -588,46 +582,112 @@ app.get('/api/moviesda/download', async (req, res) => {
       info: {}
     };
     
-    $('div.dlink a').each((_, el) => {
-      const href = $(el).attr("href");
+    const info = {
+      fileName: '',
+      fileSize: '',
+      duration: '',
+      resolution: '',
+      format: 'Mp4'
+    };
+    
+    $('.songinfo .details').each((_, el) => {
+      const text = $(el).text().trim();
+      if (text.includes('File Name:')) {
+        info.fileName = text.replace('File Name:', '').trim();
+      }
+      if (text.includes('File Size:')) {
+        info.fileSize = text.replace('File Size:', '').trim();
+      }
+      if (text.includes('Duration:')) {
+        info.duration = text.replace('Duration:', '').trim();
+      }
+      if (text.includes('Video Resolution:')) {
+        info.resolution = text.replace('Video Resolution:', '').trim();
+      }
+      if (text.includes('Download Format:')) {
+        info.format = text.replace('Download Format:', '').trim();
+      }
+    });
+    
+    if (info.fileName) result.info.file_name = info.fileName;
+    if (info.fileSize) result.info.file_size = info.fileSize;
+    if (info.duration) result.info.duration = info.duration;
+    if (info.resolution) result.info.video_resolution = info.resolution;
+    if (info.format) result.info.format = info.format;
+    
+    let serverNum = 1;
+    $('div.download div.dlink a').each((_, el) => {
+      const href = $(el).attr('href');
       if (href) {
         result.download.push({
-          server: "Direct Download",
+          server: `Server ${serverNum++}`,
           url: href
         });
       }
     });
     
-    $('div.details').each((_, el) => {
-      const text = $(el).text().trim();
-      const parts = text.split(':');
-      if (parts.length >= 2) {
-        const key = parts[0].toLowerCase().replace(/ /g, '_');
-        result.info[key] = parts.slice(1).join(':').trim();
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+app.get('/api/moviesda/download', async (req, res) => {
+  const { url } = req.query;
+  
+  if (!url) {
+    return res.status(400).json({ error: "URL parameter is required" });
+  }
+  
+  try {
+    let downloadPageUrl = null;
+    
+    const { data } = await axios.get(url, axiosConfig);
+    const $ = cheerio.load(data);
+    
+    const hasDirectDownloads = $('div.download div.dlink a').length > 0;
+    
+    if (hasDirectDownloads) {
+      downloadPageUrl = url;
+    } else {
+      const qualityLinks = [];
+      $('div.f a').each((_, el) => {
+        const href = $(el).attr('href');
+        const text = $(el).text().trim();
+        if (href && href.includes('-movie/') && !href.includes('/download/')) {
+          qualityLinks.push({
+            quality: text,
+            url: href.startsWith('http') ? href : SOURCES.moviesda + href
+          });
+        }
+      });
+      
+      if (qualityLinks.length === 0) {
+        const dlLink = $('li a.coral').attr('href');
+        if (dlLink) {
+          downloadPageUrl = dlLink.startsWith('http') ? dlLink : SOURCES.moviesda + dlLink;
+        }
+      } else {
+        const preferredLink = qualityLinks.find(l => l.quality.includes('720p')) || qualityLinks[0];
+        
+        const { data: qualityPage } = await axios.get(preferredLink.url, axiosConfig);
+        const $q = cheerio.load(qualityPage);
+        
+        const dlLink = $q('li a.coral').attr('href');
+        if (dlLink) {
+          downloadPageUrl = dlLink.startsWith('http') ? dlLink : SOURCES.moviesda + dlLink;
+        }
       }
-    });
-    
-    const fileName = $('strong:contains("File Name")').parent().text().replace('File Name:', '').trim() ||
-                      $('div.details strong').first().text().trim() || '';
-    const fileSize = $('strong:contains("File Size")').parent().text().replace('File Size:', '').trim() || '';
-    const duration = $('strong:contains("Duration")').parent().text().replace('Duration:', '').trim() || '';
-    const resolution = $('strong:contains("Video Resolution")').parent().text().replace('Video Resolution:', '').trim() || '';
-    const format = $('strong:contains("Download Format")').parent().text().replace('Download Format:', '').trim() || 'Mp4';
-    
-    if (fileName) result.info.file_name = fileName;
-    if (fileSize) result.info.file_size = fileSize;
-    if (duration) result.info.duration = duration;
-    if (resolution) result.info.video_resolution = resolution;
-    if (format) result.info.format = format;
-    
-    const dlLink = $('a[href*="hotshare"]').attr('href');
-    if (dlLink) {
-      result.download = [{ server: "HotShare", url: dlLink }];
     }
     
-    const watchLink = $('a[href*="onestream"]').attr('href');
-    if (watchLink) {
-      result.watch = [{ server: "Onestream", url: watchLink }];
+    if (!downloadPageUrl) {
+      return res.status(404).json({ error: "Could not find download page" });
+    }
+    
+    const result = await getMoviesdaDirectLinks(downloadPageUrl);
+    
+    if (!result) {
+      return res.status(404).json({ error: "Could not extract download links" });
     }
     
     res.json(result);

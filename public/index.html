@@ -5,76 +5,154 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sri Keyan - Tamil & Tamil Dubbed Movies</title>
     <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Sri Keyan</h1>
-            <p>Tamil & Tamil Dubbed Movies - Direct Download</p>
-        </header>
-
-        <div class="search-box">
-            <input type="text" id="searchInput" placeholder="Search for movies...">
-            <button id="searchBtn">Search</button>
+    <nav class="navbar">
+        <div class="nav-left">
+            <div class="logo">
+                <span class="logo-s">S</span>
+                <span class="logo-ri">ri</span>
+                <span class="logo-k">K</span>
+                <span class="logo-eyan">eyan</span>
+            </div>
+            <div class="nav-links">
+                <a href="#" class="nav-link active">Home</a>
+                <a href="#" class="nav-link">Movies</a>
+                <a href="#" class="nav-link">New</a>
+            </div>
         </div>
-
-        <div class="tabs">
-            <button class="tab active" data-source="isaidub">Tamil Dubbed</button>
-            <button class="tab" data-source="moviesda">Tamil Movies</button>
+        <div class="nav-right">
+            <div class="search-container">
+                <input type="text" id="searchInput" placeholder="Titles, people, genres">
+                <button id="searchBtn">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                        <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                    </svg>
+                </button>
+            </div>
         </div>
+    </nav>
 
-        <div class="category-tabs" id="categoryTabs">
+    <div class="tabs-container">
+        <div class="source-tabs">
+            <button class="source-tab active" data-source="isaidub">Tamil Dubbed</button>
+            <button class="source-tab" data-source="moviesda">Tamil Movies</button>
+        </div>
+        <div class="category-tabs">
             <button class="cat-tab active" data-category="2026">2026</button>
             <button class="cat-tab" data-category="2025">2025</button>
             <button class="cat-tab" data-category="2024">2024</button>
         </div>
+    </div>
 
-        <div id="loading" class="loading" style="display: none;">
-            <div class="spinner"></div>
-            <p>Loading...</p>
+    <main>
+        <section class="hero-section" id="heroSection">
+            <div class="hero-backdrop" id="heroBackdrop"></div>
+            <div class="hero-gradient"></div>
+            <div class="hero-content">
+                <div class="hero-logo" id="heroLogo"></div>
+                <h1 class="hero-title" id="heroTitle"></h1>
+                <p class="hero-description" id="heroDescription"></p>
+                <div class="hero-buttons">
+                    <button class="btn-play" id="playTrailerBtn">
+                        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                            <path d="M8 5v14l11-7z"/>
+                        </svg>
+                        Play Trailer
+                    </button>
+                    <button class="btn-info" id="moreInfoBtn">
+                        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                        </svg>
+                        More Info
+                    </button>
+                </div>
+            </div>
+            <div class="hero-slider-controls">
+                <button class="slider-prev" id="sliderPrev">
+                    <svg viewBox="0 0 24 24" width="30" height="30" fill="currentColor">
+                        <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+                    </svg>
+                </button>
+                <button class="slider-next" id="sliderNext">
+                    <svg viewBox="0 0 24 24" width="30" height="30" fill="currentColor">
+                        <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+                    </svg>
+                </button>
+            </div>
+        </section>
+
+        <div id="loading" class="loading-overlay" style="display: none;">
+            <div class="loader"></div>
         </div>
 
-        <div id="movieGrid" class="movie-grid"></div>
+        <section class="movies-section" id="moviesSection">
+            <div class="movies-row">
+                <h2 class="row-title" id="rowTitle">Tamil Dubbed Movies 2026</h2>
+                <div class="movies-slider" id="moviesSlider">
+                    <div id="movieGrid" class="movie-grid"></div>
+                </div>
+            </div>
+        </section>
+    </main>
 
-        <div id="movieModal" class="modal">
-            <div class="modal-content">
-                <span class="close">&times;</span>
-                <div class="modal-body">
-                    <div class="modal-poster">
-                        <img id="modalPoster" src="" alt="">
+    <div id="movieModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" id="modalClose">&times;</button>
+            <div class="modal-backdrop" id="modalBackdrop"></div>
+            <div class="modal-gradient"></div>
+            <div class="modal-body">
+                <div class="modal-left">
+                    <h2 id="modalTitle" class="modal-title"></h2>
+                    <div class="modal-meta">
+                        <span id="modalQuality" class="badge"></span>
+                        <span id="modalRating" class="rating"></span>
+                        <span id="modalLanguage" class="badge"></span>
                     </div>
-                    <div class="modal-info">
-                        <h2 id="modalTitle">Movie Title</h2>
-                        <p id="modalGenres" class="modal-genres"></p>
-                        <p id="modalDirector" class="modal-meta"></p>
-                        <p id="modalStarring" class="modal-meta"></p>
-                        <p id="modalQuality" class="modal-meta"></p>
-                        <p id="modalLanguage" class="modal-meta"></p>
-                        <p id="modalRating" class="modal-meta"></p>
-                        <p id="modalUpdated" class="modal-meta"></p>
-                        <p id="modalSynopsis" class="modal-synopsis"></p>
-                        <div id="loadingDetails" class="loading" style="display: none;">
-                            <div class="spinner"></div>
-                        </div>
+                    <p id="modalSynopsis" class="modal-synopsis"></p>
+                    <div class="modal-details">
+                        <p id="modalDirector"></p>
+                        <p id="modalStarring"></p>
                     </div>
                 </div>
-                <div class="modal-download">
-                    <h3>Select Quality</h3>
-                    <div id="qualityOptions" class="quality-options"></div>
-                    <div id="fileInfo" class="file-info" style="display: none;"></div>
-                    <div id="downloadLinks" class="download-links"></div>
-                    <div id="loadingLinks" class="loading" style="display: none;">
-                        <div class="spinner"></div>
-                        <p>Fetching download links...</p>
-                    </div>
+                <div class="modal-right">
+                    <div id="modalPoster" class="modal-poster"></div>
+                </div>
+            </div>
+            <div class="modal-download">
+                <h3>Download Options</h3>
+                <div id="qualityOptions" class="quality-options"></div>
+                <div id="fileInfo" class="file-info" style="display: none;"></div>
+                <div id="downloadLinks" class="download-links"></div>
+                <div id="loadingLinks" class="loading-links" style="display: none;">
+                    <div class="loader-small"></div>
+                    <span>Fetching download links...</span>
                 </div>
             </div>
         </div>
     </div>
 
-    <footer>
-        <div class="brand">Sri Keyan</div>
-        <p>Tamil & Tamil Dubbed Movies Download</p>
+    <div id="trailerModal" class="trailer-modal">
+        <button class="trailer-close" id="trailerClose">&times;</button>
+        <div class="trailer-container">
+            <iframe id="trailerFrame" src="" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-logo">
+                <span class="logo-s">S</span><span class="logo-ri">ri</span><span class="logo-k">K</span><span class="logo-eyan">eyan</span>
+            </div>
+            <p class="footer-tagline">Tamil & Tamil Dubbed Movies - Direct Download</p>
+            <div class="footer-links">
+                <a href="#">About</a>
+                <a href="#">Contact</a>
+                <a href="#">DMCA</a>
+            </div>
+            <p class="copyright">&copy; 2026 Sri Keyan. All rights reserved.</p>
+        </div>
     </footer>
 
     <script src="app.js"></script>

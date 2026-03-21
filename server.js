@@ -387,39 +387,50 @@ app.get('/api/moviesda/movies', async (req, res) => {
   const seenLinks = new Set();
 
   for (const year of years) {
-    const targetUrl = `${SOURCES.moviesda}/tamil-${year}-movies/`;
+    // Fetch all pages for each year
+    for (let page = 1; page <= 10; page++) {
+      const targetUrl = page === 1 
+        ? `${SOURCES.moviesda}/tamil-${year}-movies/`
+        : `${SOURCES.moviesda}/tamil-${year}-movies/?page=${page}`;
 
-    try {
-      const { data } = await axios.get(targetUrl, axiosConfig);
-      const $ = cheerio.load(data);
+      try {
+        const { data } = await axios.get(targetUrl, axiosConfig);
+        const $ = cheerio.load(data);
+        
+        let foundMovies = 0;
 
-      $(".f a").each((_, el) => {
-        const href = $(el).attr("href");
-        const title = $(el).text().replace("[+]", "").trim();
+        $(".f a").each((_, el) => {
+          const href = $(el).attr("href");
+          const title = $(el).text().replace("[+]", "").trim();
 
-        if (href && title && href.includes('movie') && !title.match(/^(Home|Download|Tamil)/i) && !seenLinks.has(href)) {
-          seenLinks.add(href);
-          const yearMatch = title.match(/\((\d{4})\)/);
-          const movieYear = yearMatch ? yearMatch[1] : year;
-          const nameForUrl = title.toLowerCase()
-            .replace(/[^a-z0-9\s]/g, '')
-            .replace(/\s+/g, '-')
-            .replace(/-+/g, '-');
+          if (href && title && href.includes('movie') && !title.match(/^(Home|Download|Tamil)/i) && !seenLinks.has(href)) {
+            seenLinks.add(href);
+            const yearMatch = title.match(/\((\d{4})\)/);
+            const movieYear = yearMatch ? yearMatch[1] : year;
+            const nameForUrl = title.toLowerCase()
+              .replace(/[^a-z0-9\s]/g, '')
+              .replace(/\s+/g, '-')
+              .replace(/-+/g, '-');
 
-          const thumbnail = movieYear
-            ? `${SOURCES.moviesda}/uploads/posters/${nameForUrl}.jpg`
-            : null;
+            const thumbnail = movieYear
+              ? `${SOURCES.moviesda}/uploads/posters/${nameForUrl}.jpg`
+              : null;
 
-          movies.push({
-            title,
-            link: href.startsWith("http") ? href : SOURCES.moviesda + href,
-            thumbnail: thumbnail,
-            year: movieYear
-          });
-        }
-      });
-    } catch (error) {
-      console.error(`Moviesda ${year} Error:`, error.message);
+            movies.push({
+              title,
+              link: href.startsWith("http") ? href : SOURCES.moviesda + href,
+              thumbnail: thumbnail,
+              year: movieYear
+            });
+            foundMovies++;
+          }
+        });
+        
+        // If no movies found on this page, stop pagination
+        if (foundMovies === 0 && page > 1) break;
+      } catch (error) {
+        break; // Stop on error
+      }
     }
   }
 

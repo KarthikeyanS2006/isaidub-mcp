@@ -63,6 +63,8 @@ const myListSection = document.getElementById('myListSection');
 const myListGrid = document.getElementById('myListGrid');
 const reduceMotionBtn = document.getElementById('reduceMotionBtn');
 const mobileReduceMotionBtn = document.getElementById('mobileReduceMotionBtn');
+const themeToggle = document.getElementById('themeToggle');
+const themeIcon = document.getElementById('themeIcon');
 
 // LocalStorage Manager
 const Storage = {
@@ -70,6 +72,7 @@ const Storage = {
     REDUCE_MOTION_KEY: 'srikcyan_reduce_motion',
     LAST_SOURCE_KEY: 'srikcyan_source',
     LAST_CATEGORY_KEY: 'srikcyan_category',
+    THEME_KEY: 'srikcyan_theme',
     
     getMyList() {
         const data = localStorage.getItem(this.MY_LIST_KEY);
@@ -128,8 +131,36 @@ const Storage = {
     
     getLastCategory() {
         return localStorage.getItem(this.LAST_CATEGORY_KEY) || '2026';
+    },
+    
+    setTheme(theme) {
+        localStorage.setItem(this.THEME_KEY, theme);
+        applyTheme(theme);
+    },
+    
+    getTheme() {
+        return localStorage.getItem(this.THEME_KEY) || 'system';
     }
 };
+
+function applyTheme(theme) {
+    if (theme === 'system') {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+    } else {
+        document.documentElement.setAttribute('data-theme', theme);
+    }
+    updateThemeIcon();
+}
+
+function updateThemeIcon() {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    if (currentTheme === 'light') {
+        themeIcon.innerHTML = '<path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"/>';
+    } else {
+        themeIcon.innerHTML = '<path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/>';
+    }
+}
 
 function showToast(message) {
     const toast = document.createElement('div');
@@ -210,7 +241,36 @@ window.addEventListener('load', () => {
         splashScreen.classList.add('hidden');
     }, 4000);
     
+    // Initialize theme
+    const savedTheme = Storage.getTheme();
+    applyTheme(savedTheme);
+    
     checkApiStatus();
+});
+
+// Theme toggle
+let themeMode = 'dark'; // dark, light, system
+const themeModes = ['dark', 'light', 'system'];
+
+themeToggle?.addEventListener('click', () => {
+    const currentIndex = themeModes.indexOf(themeMode);
+    themeMode = themeModes[(currentIndex + 1) % themeModes.length];
+    Storage.setTheme(themeMode);
+    
+    if (themeMode === 'system') {
+        showToast('Theme: System Default');
+    } else if (themeMode === 'light') {
+        showToast('Theme: Light');
+    } else {
+        showToast('Theme: Dark');
+    }
+});
+
+// Listen for system theme changes
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (Storage.getTheme() === 'system') {
+        applyTheme('system');
+    }
 });
 
 async function fetchMovies() {

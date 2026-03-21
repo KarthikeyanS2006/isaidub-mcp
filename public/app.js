@@ -217,7 +217,9 @@ async function fetchMovies() {
     showLoading(true);
     
     try {
-        const url = `${API_BASE}/api/${currentSource}/movies?category=${currentCategory}`;
+        // Always use Moviesda since ISAIDUB is blocked
+        const source = 'moviesda';
+        const url = `${API_BASE}/api/${source}/movies?category=${currentCategory}`;
         console.log('Fetching:', url);
         const response = await fetch(url);
         console.log('Response status:', response.status);
@@ -534,57 +536,17 @@ async function searchMovies(query) {
     moviesSection.style.display = 'block';
     myListSection.style.display = 'none';
     
-    console.log('Searching for:', query, 'Source:', currentSource);
+    console.log('Searching for:', query);
     
     try {
-        let results = [];
         const searchTerm = query.toLowerCase();
         
-        if (currentSource === 'isaidub') {
-            // Filter from already loaded movies for ISAIDUB (server blocked)
-            results = allMovies.filter(m => 
-                m.source === 'isaidub' && 
-                m.title.toLowerCase().includes(searchTerm)
-            );
-            console.log('ISAIDUB filtered from cache:', results.length, 'movies');
-            
-            // If no results from cache, try server
-            if (results.length === 0) {
-                try {
-                    const url = `${API_BASE}/api/isaidub/search?q=${encodeURIComponent(query)}`;
-                    console.log('ISAIDUB Search URL:', url);
-                    const isaidubRes = await fetch(url);
-                    console.log('ISAIDUB Search Status:', isaidubRes.status);
-                    const data = await isaidubRes.json();
-                    console.log('ISAIDUB Search Results:', data);
-                    if (Array.isArray(data) && data.length > 0) {
-                        results = data.map(m => ({ ...m, source: 'isaidub' }));
-                    }
-                } catch (e) {
-                    console.error('ISAIDUB search error:', e);
-                }
-            }
-        } else {
-            // For Moviesda, use server search
-            try {
-                const url = `${API_BASE}/api/moviesda/search?q=${encodeURIComponent(query)}`;
-                console.log('Moviesda Search URL:', url);
-                const moviesdaRes = await fetch(url);
-                console.log('Moviesda Search Status:', moviesdaRes.status);
-                const data = await moviesdaRes.json();
-                console.log('Moviesda Search Results:', data);
-                results = Array.isArray(data) ? data.map(m => ({ ...m, source: 'moviesda' })) : [];
-            } catch (e) {
-                console.error('Moviesda search error:', e);
-                // Fallback to cache
-                results = allMovies.filter(m => 
-                    m.source === 'moviesda' && 
-                    m.title.toLowerCase().includes(searchTerm)
-                );
-            }
-        }
+        // Search from all loaded movies (client-side filtering)
+        const results = allMovies.filter(m => 
+            m.title.toLowerCase().includes(searchTerm)
+        );
         
-        console.log('Total search results:', results.length);
+        console.log('Search results:', results.length, 'movies');
         
         if (results.length === 0) {
             moviesSection.innerHTML = '<p style="text-align:center;color:#b3b3b3;padding:50px;">No movies found for your search</p>';

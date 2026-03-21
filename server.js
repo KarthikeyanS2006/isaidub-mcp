@@ -433,18 +433,11 @@ app.get('/api/moviesda/search', async (req, res) => {
     return res.status(400).json({ error: "Query parameter 'q' is required" });
   }
   
-  console.log('Moviesda search for:', q);
-  
   try {
-    const searchUrl = `${SOURCES.moviesda}/?s=${encodeURIComponent(q)}`;
-    console.log('Moviesda search URL:', searchUrl);
-    
-    const { data } = await axios.get(searchUrl, axiosConfig);
+    const { data } = await axios.get(`${SOURCES.moviesda}/?s=${encodeURIComponent(q)}`, axiosConfig);
     const $ = cheerio.load(data);
     const results = [];
 
-    console.log('Moviesda search page loaded, looking for .f a elements...');
-    
     $(".f a").each((_, el) => {
       const href = $(el).attr("href");
       const title = $(el).text().replace("[+]", "").trim();
@@ -469,9 +462,6 @@ app.get('/api/moviesda/search', async (req, res) => {
       }
     });
 
-    console.log('Found', results.length, 'from .f a selector');
-    
-    // Try additional selectors
     $('b').each((_, el) => {
       const text = $(el).text().trim();
       const parent = $(el).parent();
@@ -499,7 +489,6 @@ app.get('/api/moviesda/search', async (req, res) => {
       }
     });
 
-    console.log('Total results:', results.length);
     res.json(results);
   } catch (error) {
     console.error('Moviesda search error:', error.message);

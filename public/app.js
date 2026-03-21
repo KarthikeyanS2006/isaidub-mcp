@@ -526,7 +526,12 @@ function closeTrailerModal() {
 async function searchMovies(query) {
     if (!query.trim()) return;
     
-    showLoading(true);
+    // Check if movies are loaded
+    if (allMovies.length === 0) {
+        alert('Please wait for movies to load, then search again');
+        return;
+    }
+    
     searchSuggestions.style.display = 'none';
     moviesSection.style.display = 'block';
     myListSection.style.display = 'none';
@@ -535,19 +540,12 @@ async function searchMovies(query) {
         const searchTerm = query.toLowerCase().trim();
         
         // Search from all loaded movies (client-side filtering)
-        // Remove special chars and search in cleaned title
-        const cleanSearch = searchTerm.replace(/[^a-z0-9\s]/g, '').trim();
-        
-        const results = allMovies.filter(m => {
-            const title = m.title.toLowerCase();
-            const cleanTitle = title.replace(/[^a-z0-9\s]/g, '').trim();
-            
-            // Check if search term is in title (with or without special chars)
-            return title.includes(searchTerm) || cleanTitle.includes(cleanSearch);
-        });
+        const results = allMovies.filter(m => 
+            m.title.toLowerCase().includes(searchTerm)
+        );
         
         if (results.length === 0) {
-            moviesSection.innerHTML = '<p style="text-align:center;color:#b3b3b3;padding:50px;">No movies found for your search</p>';
+            moviesSection.innerHTML = `<p style="text-align:center;color:#b3b3b3;padding:50px;">No movies found for "${query}"<br><small>Total movies loaded: ${allMovies.length}</small></p>`;
         } else {
             allMovies = results;
             heroMovies = results.slice(0, 5);
@@ -562,8 +560,6 @@ async function searchMovies(query) {
         closeMobileMenu();
     } catch (error) {
         moviesSection.innerHTML = '<p style="text-align:center;color:#e50914;padding:50px;">Search failed. Please try again.</p>';
-    } finally {
-        showLoading(false);
     }
 }
 

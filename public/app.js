@@ -534,26 +534,38 @@ async function searchMovies(query) {
     moviesSection.style.display = 'block';
     myListSection.style.display = 'none';
     
+    console.log('Searching for:', query, 'Source:', currentSource);
+    
     try {
         let results = [];
         
         if (currentSource === 'isaidub') {
             try {
-                const isaidubRes = await fetch(`${API_BASE}/api/isaidub/search?q=${encodeURIComponent(query)}`);
+                const url = `${API_BASE}/api/isaidub/search?q=${encodeURIComponent(query)}`;
+                console.log('ISAIDUB Search URL:', url);
+                const isaidubRes = await fetch(url);
+                console.log('ISAIDUB Search Status:', isaidubRes.status);
                 const data = await isaidubRes.json();
+                console.log('ISAIDUB Search Results:', data);
                 results = Array.isArray(data) ? data.map(m => ({ ...m, source: 'isaidub' })) : [];
             } catch (e) {
                 console.error('ISAIDUB search error:', e);
             }
         } else {
             try {
-                const moviesdaRes = await fetch(`${API_BASE}/api/moviesda/search?q=${encodeURIComponent(query)}`);
+                const url = `${API_BASE}/api/moviesda/search?q=${encodeURIComponent(query)}`;
+                console.log('Moviesda Search URL:', url);
+                const moviesdaRes = await fetch(url);
+                console.log('Moviesda Search Status:', moviesdaRes.status);
                 const data = await moviesdaRes.json();
+                console.log('Moviesda Search Results:', data);
                 results = Array.isArray(data) ? data.map(m => ({ ...m, source: 'moviesda' })) : [];
             } catch (e) {
                 console.error('Moviesda search error:', e);
             }
         }
+        
+        console.log('Total search results:', results.length);
         
         if (results.length === 0) {
             moviesSection.innerHTML = '<p style="text-align:center;color:#b3b3b3;padding:50px;">No movies found for your search</p>';

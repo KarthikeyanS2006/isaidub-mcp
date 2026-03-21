@@ -532,12 +532,19 @@ async function searchMovies(query) {
     myListSection.style.display = 'none';
     
     try {
-        const searchTerm = query.toLowerCase();
+        const searchTerm = query.toLowerCase().trim();
         
         // Search from all loaded movies (client-side filtering)
-        const results = allMovies.filter(m => 
-            m.title.toLowerCase().includes(searchTerm)
-        );
+        // Remove special chars and search in cleaned title
+        const cleanSearch = searchTerm.replace(/[^a-z0-9\s]/g, '').trim();
+        
+        const results = allMovies.filter(m => {
+            const title = m.title.toLowerCase();
+            const cleanTitle = title.replace(/[^a-z0-9\s]/g, '').trim();
+            
+            // Check if search term is in title (with or without special chars)
+            return title.includes(searchTerm) || cleanTitle.includes(cleanSearch);
+        });
         
         if (results.length === 0) {
             moviesSection.innerHTML = '<p style="text-align:center;color:#b3b3b3;padding:50px;">No movies found for your search</p>';

@@ -42,56 +42,12 @@ body {
     visibility: hidden;
 }
 
-.splash-logo {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 8rem;
-    margin-bottom: 20px;
-}
-
-.splash-s, .splash-k {
-    color: var(--primary);
-    opacity: 0;
-    transform: scale(0) rotate(-180deg);
-    animation: expandLetter 1.5s ease-out forwards;
-}
-
-.splash-s {
-    animation-delay: 0.3s;
-}
-
-.splash-k {
-    animation-delay: 0.8s;
-}
-
-@keyframes expandLetter {
-    0% {
-        opacity: 0;
-        transform: scale(0) rotate(-180deg) translateX(0);
-    }
-    50% {
-        opacity: 1;
-        transform: scale(1.5) rotate(0deg) translateX(0);
-    }
-    70% {
-        transform: scale(1.3) rotate(0deg) translateX(var(--move-distance, 50px));
-    }
-    100% {
-        opacity: 1;
-        transform: scale(1) rotate(0deg) translateX(0);
-    }
-}
-
 .splash-text {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 3rem;
-    color: var(--text);
+    font-size: 4rem;
+    color: var(--primary);
     letter-spacing: 5px;
-    opacity: 0;
-    animation: fadeInUp 0.8s ease forwards;
-    animation-delay: 1.5s;
+    animation: fadeIn 0.5s ease forwards;
 }
 
 .splash-loader {
@@ -107,23 +63,16 @@ body {
     height: 100%;
     background: var(--primary);
     width: 0;
-    animation: loadBar 1.5s ease forwards;
-    animation-delay: 2s;
+    animation: loadBar 1s ease forwards;
 }
 
 @keyframes loadBar {
     to { width: 100%; }
 }
 
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 /* Navbar */
@@ -1324,12 +1273,8 @@ main {
         font-size: 1.4rem;
     }
     
-    .splash-logo {
-        font-size: 5rem;
-    }
-    
     .splash-text {
-        font-size: 2rem;
+        font-size: 2.5rem;
     }
     
     .hero-content {
@@ -1381,13 +1326,6 @@ body.reduce-motion .movie-card:hover {
 
 body.reduce-motion .hero-backdrop {
     animation: none !important;
-}
-
-body.reduce-motion .splash-s,
-body.reduce-motion .splash-k {
-    animation: none !important;
-    opacity: 1 !important;
-    transform: none !important;
 }
 
 /* Icon Button */

@@ -535,41 +535,37 @@ async function searchMovies(query) {
     myListSection.style.display = 'none';
     
     try {
-        let isaidubMovies = [];
-        let moviesdaMovies = [];
+        let results = [];
         
-        try {
-            const isaidubRes = await fetch(`${API_BASE}/api/isaidub/search?q=${encodeURIComponent(query)}`);
-            const data1 = await isaidubRes.json();
-            isaidubMovies = Array.isArray(data1) ? data1 : [];
-        } catch (e) {
-            console.error('ISAIDUB search error:', e);
+        if (currentSource === 'isaidub') {
+            try {
+                const isaidubRes = await fetch(`${API_BASE}/api/isaidub/search?q=${encodeURIComponent(query)}`);
+                const data = await isaidubRes.json();
+                results = Array.isArray(data) ? data.map(m => ({ ...m, source: 'isaidub' })) : [];
+            } catch (e) {
+                console.error('ISAIDUB search error:', e);
+            }
+        } else {
+            try {
+                const moviesdaRes = await fetch(`${API_BASE}/api/moviesda/search?q=${encodeURIComponent(query)}`);
+                const data = await moviesdaRes.json();
+                results = Array.isArray(data) ? data.map(m => ({ ...m, source: 'moviesda' })) : [];
+            } catch (e) {
+                console.error('Moviesda search error:', e);
+            }
         }
         
-        try {
-            const moviesdaRes = await fetch(`${API_BASE}/api/moviesda/search?q=${encodeURIComponent(query)}`);
-            const data2 = await moviesdaRes.json();
-            moviesdaMovies = Array.isArray(data2) ? data2 : [];
-        } catch (e) {
-            console.error('Moviesda search error:', e);
-        }
-        
-        const combinedMovies = [
-            ...isaidubMovies.map(m => ({ ...m, source: 'isaidub' })),
-            ...moviesdaMovies.map(m => ({ ...m, source: 'moviesda' }))
-        ];
-        
-        if (combinedMovies.length === 0) {
+        if (results.length === 0) {
             moviesSection.innerHTML = '<p style="text-align:center;color:#b3b3b3;padding:50px;">No movies found for your search</p>';
         } else {
-            allMovies = combinedMovies;
-            heroMovies = combinedMovies.slice(0, 5);
+            allMovies = results;
+            heroMovies = results.slice(0, 5);
             createHeroIndicators();
             if (heroMovies.length > 0) {
                 updateHeroSection(heroMovies[0]);
             }
             
-            createMovieRows(combinedMovies);
+            createMovieRows(results);
         }
         
         closeMobileMenu();

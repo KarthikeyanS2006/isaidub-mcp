@@ -376,42 +376,48 @@ app.get('/api/isaidub/details', async (req, res) => {
 // MOVIESDA API - Tamil Movies
 app.get('/api/moviesda/movies', async (req, res) => {
   const { category = '2026' } = req.query;
-  const targetUrl = `${SOURCES.moviesda}/tamil-${category}-movies/`;
-  
-  try {
-    const { data } = await axios.get(targetUrl, axiosConfig);
-    const $ = cheerio.load(data);
-    const movies = [];
+  const years = ['2026', '2025', '2024', '2023', '2022', '2021', '2020'];
+  const movies = [];
+  const seenLinks = new Set();
 
-    $(".f a").each((_, el) => {
-      const href = $(el).attr("href");
-      const title = $(el).text().replace("[+]", "").trim();
-      
-      if (href && title && href.includes('movie') && !title.match(/^(Home|Download|Tamil)/i)) {
-        const yearMatch = title.match(/\((\d{4})\)/);
-        const year = yearMatch ? yearMatch[1] : '';
-        const nameForUrl = title.toLowerCase()
-          .replace(/[^a-z0-9\s]/g, '')
-          .replace(/\s+/g, '-')
-          .replace(/-+/g, '-');
-        
-        const thumbnail = year 
-          ? `${SOURCES.moviesda}/uploads/posters/${nameForUrl}.jpg`
-          : null;
-        
-        movies.push({
-          title,
-          link: href.startsWith("http") ? href : SOURCES.moviesda + href,
-          thumbnail: thumbnail
-        });
-      }
-    });
+  for (const year of years) {
+    const targetUrl = `${SOURCES.moviesda}/tamil-${year}-movies/`;
 
-    res.json(movies);
-  } catch (error) {
-    console.error('Moviesda Error:', error.message);
-    res.json([]);
+    try {
+      const { data } = await axios.get(targetUrl, axiosConfig);
+      const $ = cheerio.load(data);
+
+      $(".f a").each((_, el) => {
+        const href = $(el).attr("href");
+        const title = $(el).text().replace("[+]", "").trim();
+
+        if (href && title && href.includes('movie') && !title.match(/^(Home|Download|Tamil)/i) && !seenLinks.has(href)) {
+          seenLinks.add(href);
+          const yearMatch = title.match(/\((\d{4})\)/);
+          const movieYear = yearMatch ? yearMatch[1] : year;
+          const nameForUrl = title.toLowerCase()
+            .replace(/[^a-z0-9\s]/g, '')
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-');
+
+          const thumbnail = movieYear
+            ? `${SOURCES.moviesda}/uploads/posters/${nameForUrl}.jpg`
+            : null;
+
+          movies.push({
+            title,
+            link: href.startsWith("http") ? href : SOURCES.moviesda + href,
+            thumbnail: thumbnail,
+            year: movieYear
+          });
+        }
+      });
+    } catch (error) {
+      console.error(`Moviesda ${year} Error:`, error.message);
+    }
   }
+
+  res.json(movies);
 });
 
 app.get('/api/moviesda/search', async (req, res) => {

@@ -217,15 +217,11 @@ async function fetchMovies() {
     showLoading(true);
     
     try {
-        // Always use Moviesda since ISAIDUB is blocked
         const source = 'moviesda';
         const url = `${API_BASE}/api/${source}/movies?category=${currentCategory}`;
-        console.log('Fetching:', url);
         const response = await fetch(url);
-        console.log('Response status:', response.status);
         const data = await response.json();
         const movies = Array.isArray(data) ? data : [];
-        console.log('Got movies:', movies.length);
         
         if (movies.length === 0) {
             moviesSection.innerHTML = '<p style="text-align:center;color:#b3b3b3;padding:50px;">No movies found</p>';
@@ -242,7 +238,6 @@ async function fetchMovies() {
         renderMyList();
     } catch (error) {
         moviesSection.innerHTML = `<p style="text-align:center;color:#e50914;padding:50px;">Error: ${error.message}</p>`;
-        console.error('Fetch error:', error);
     } finally {
         showLoading(false);
     }
@@ -536,8 +531,6 @@ async function searchMovies(query) {
     moviesSection.style.display = 'block';
     myListSection.style.display = 'none';
     
-    console.log('Searching for:', query);
-    
     try {
         const searchTerm = query.toLowerCase();
         
@@ -545,8 +538,6 @@ async function searchMovies(query) {
         const results = allMovies.filter(m => 
             m.title.toLowerCase().includes(searchTerm)
         );
-        
-        console.log('Search results:', results.length, 'movies');
         
         if (results.length === 0) {
             moviesSection.innerHTML = '<p style="text-align:center;color:#b3b3b3;padding:50px;">No movies found for your search</p>';
@@ -563,7 +554,6 @@ async function searchMovies(query) {
         
         closeMobileMenu();
     } catch (error) {
-        console.error('Search error:', error);
         moviesSection.innerHTML = '<p style="text-align:center;color:#e50914;padding:50px;">Search failed. Please try again.</p>';
     } finally {
         showLoading(false);

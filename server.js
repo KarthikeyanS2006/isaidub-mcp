@@ -151,43 +151,49 @@ async function getFinalLinks(dubmvUrl) {
 // ISAIDUB API - Tamil Dubbed Movies
 app.get('/api/isaidub/movies', async (req, res) => {
   const { category = '2026' } = req.query;
-  const targetUrl = `${SOURCES.isaidub}/tamil-${category}-dubbed-movies/`;
-  
-  try {
-    const response = await axios.get(targetUrl, axiosConfig);
-    const data = response.data;
-    const $ = cheerio.load(data);
-    const movies = [];
+  const years = ['2026', '2025', '2024', '2023', '2022', '2021', '2020'];
+  const movies = [];
+  const seenLinks = new Set();
 
-    $(".f a").each((_, el) => {
-      const href = $(el).attr("href");
-      const title = $(el).text().replace("[+]", "").trim();
-      
-      if (href && title && href.includes('movie') && !title.match(/^(Download|Tamil|Home|Contact|Check)/i)) {
-        const yearMatch = title.match(/\((\d{4})\)/);
-        const year = yearMatch ? yearMatch[1] : '';
-        const nameForUrl = title.toLowerCase()
-          .replace(/[^a-z0-9\s]/g, '')
-          .replace(/\s+/g, '-')
-          .replace(/-+/g, '-');
-        
-        const thumbnail = year 
-          ? `${SOURCES.isaidub}/uploads/posters/${nameForUrl}.jpg`
-          : null;
-        
-        movies.push({
-          title,
-          link: href.startsWith("http") ? href : SOURCES.isaidub + href,
-          thumbnail: thumbnail
-        });
-      }
-    });
+  for (const year of years) {
+    const targetUrl = `${SOURCES.isaidub}/tamil-${year}-dubbed-movies/`;
 
-    res.json(movies);
-  } catch (error) {
-    console.error('ISAIDUB Movies Error:', error.message);
-    res.json([]);
+    try {
+      const response = await axios.get(targetUrl, axiosConfig);
+      const data = response.data;
+      const $ = cheerio.load(data);
+
+      $(".f a").each((_, el) => {
+        const href = $(el).attr("href");
+        const title = $(el).text().replace("[+]", "").trim();
+
+        if (href && title && href.includes('movie') && !title.match(/^(Download|Tamil|Home|Contact|Check)/i) && !seenLinks.has(href)) {
+          seenLinks.add(href);
+          const yearMatch = title.match(/\((\d{4})\)/);
+          const movieYear = yearMatch ? yearMatch[1] : year;
+          const nameForUrl = title.toLowerCase()
+            .replace(/[^a-z0-9\s]/g, '')
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-');
+
+          const thumbnail = movieYear
+            ? `${SOURCES.isaidub}/uploads/posters/${nameForUrl}.jpg`
+            : null;
+
+          movies.push({
+            title,
+            link: href.startsWith("http") ? href : SOURCES.isaidub + href,
+            thumbnail: thumbnail,
+            year: movieYear
+          });
+        }
+      });
+    } catch (error) {
+      console.error(`ISAIDUB ${year} Error:`, error.message);
+    }
   }
+
+  res.json(movies);
 });
 
 app.get('/api/isaidub/search', async (req, res) => {

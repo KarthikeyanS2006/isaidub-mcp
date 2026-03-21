@@ -538,20 +538,34 @@ async function searchMovies(query) {
     
     try {
         let results = [];
+        const searchTerm = query.toLowerCase();
         
         if (currentSource === 'isaidub') {
-            try {
-                const url = `${API_BASE}/api/isaidub/search?q=${encodeURIComponent(query)}`;
-                console.log('ISAIDUB Search URL:', url);
-                const isaidubRes = await fetch(url);
-                console.log('ISAIDUB Search Status:', isaidubRes.status);
-                const data = await isaidubRes.json();
-                console.log('ISAIDUB Search Results:', data);
-                results = Array.isArray(data) ? data.map(m => ({ ...m, source: 'isaidub' })) : [];
-            } catch (e) {
-                console.error('ISAIDUB search error:', e);
+            // Filter from already loaded movies for ISAIDUB (server blocked)
+            results = allMovies.filter(m => 
+                m.source === 'isaidub' && 
+                m.title.toLowerCase().includes(searchTerm)
+            );
+            console.log('ISAIDUB filtered from cache:', results.length, 'movies');
+            
+            // If no results from cache, try server
+            if (results.length === 0) {
+                try {
+                    const url = `${API_BASE}/api/isaidub/search?q=${encodeURIComponent(query)}`;
+                    console.log('ISAIDUB Search URL:', url);
+                    const isaidubRes = await fetch(url);
+                    console.log('ISAIDUB Search Status:', isaidubRes.status);
+                    const data = await isaidubRes.json();
+                    console.log('ISAIDUB Search Results:', data);
+                    if (Array.isArray(data) && data.length > 0) {
+                        results = data.map(m => ({ ...m, source: 'isaidub' }));
+                    }
+                } catch (e) {
+                    console.error('ISAIDUB search error:', e);
+                }
             }
         } else {
+            // For Moviesda, use server search
             try {
                 const url = `${API_BASE}/api/moviesda/search?q=${encodeURIComponent(query)}`;
                 console.log('Moviesda Search URL:', url);
@@ -562,6 +576,11 @@ async function searchMovies(query) {
                 results = Array.isArray(data) ? data.map(m => ({ ...m, source: 'moviesda' })) : [];
             } catch (e) {
                 console.error('Moviesda search error:', e);
+                // Fallback to cache
+                results = allMovies.filter(m => 
+                    m.source === 'moviesda' && 
+                    m.title.toLowerCase().includes(searchTerm)
+                );
             }
         }
         

@@ -82,31 +82,46 @@ function generateISAIDUBThumbnail(title) {
 
 app.get('/api/isaidub/movies', async (req, res) => {
   const { category = '2026' } = req.query;
-  const targetUrl = `${SOURCES.isaidub}/tamil-${category}-dubbed-movies/`;
+  const years = [category, String(parseInt(category) - 1), String(parseInt(category) - 2)];
+  const movies = [];
+  const seenLinks = new Set();
   
-  try {
-    const { data } = await axios.get(targetUrl, axiosConfig);
-    const $ = cheerio.load(data);
-    const movies = [];
-
-    $(".f a").each((_, el) => {
-      const href = $(el).attr("href");
-      const title = $(el).text().replace("[+]", "").trim();
+  for (const year of years) {
+    for (let page = 1; page <= 5; page++) {
+      const targetUrl = page === 1 
+        ? `${SOURCES.isaidub}/tamil-${year}-dubbed-movies/`
+        : `${SOURCES.isaidub}/tamil-${year}-dubbed-movies/page/${page}/`;
       
-      if (href && href.includes("/movie/") && title && !title.match(/^(Download|Tamil|Home|Contact|Check)/i)) {
-        movies.push({
-          title,
-          link: href.startsWith("http") ? href : SOURCES.isaidub + href,
-          thumbnail: generateISAIDUBThumbnail(title),
-          source: 'isaidub'
-        });
-      }
-    });
+      try {
+        const { data } = await axios.get(targetUrl, axiosConfig);
+        const $ = cheerio.load(data);
+        
+        let foundMovies = 0;
 
-    res.json(movies);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+        $(".f a").each((_, el) => {
+          const href = $(el).attr("href");
+          const title = $(el).text().replace("[+]", "").trim();
+          
+          if (href && href.includes("/movie/") && title && !title.match(/^(Download|Tamil|Home|Contact|Check)/i) && !seenLinks.has(href)) {
+            seenLinks.add(href);
+            movies.push({
+              title,
+              link: href.startsWith("http") ? href : SOURCES.isaidub + href,
+              thumbnail: generateISAIDUBThumbnail(title),
+              source: 'isaidub'
+            });
+            foundMovies++;
+          }
+        });
+        
+        if (foundMovies === 0 && page > 1) break;
+      } catch (error) {
+        break;
+      }
+    }
   }
+
+  res.json(movies);
 });
 
 app.get('/api/isaidub/search', async (req, res) => {
@@ -321,7 +336,7 @@ app.get('/api/moviesda/movies', async (req, res) => {
   const seenLinks = new Set();
 
   for (const year of years) {
-    for (let page = 1; page <= 3; page++) {
+    for (let page = 1; page <= 5; page++) {
       const targetUrl = page === 1 
         ? `${SOURCES.moviesda}/tamil-${year}-movies/`
         : `${SOURCES.moviesda}/tamil-${year}-movies/?page=${page}`;

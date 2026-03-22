@@ -650,75 +650,67 @@ async function searchMovies(query) {
     moviesSection.style.display = 'block';
     myListSection.style.display = 'none';
     
-    const years = ['2026', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017', '2016', '2015'];
+    const searchTerm = query.toLowerCase().trim();
     
-    moviesSection.innerHTML = `
-        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:50vh;gap:20px;">
-            <div class="loader" style="width:60px;height:60px;border:4px solid var(--bg-lighter);border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite;"></div>
-            <div style="text-align:center;">
-                <div class="download-progress" style="width:300px;">
-                    <div class="progress-bar-container">
-                        <div class="progress-bar">
-                            <div class="progress-bar-fill" id="searchProgressFill"></div>
-                        </div>
-                        <span class="progress-text" id="searchProgressText">0%</span>
-                    </div>
-                    <div class="progress-status" id="searchProgressStatus">Searching 2026...</div>
-                </div>
+    // First search from already loaded movies (instant)
+    let results = allMovies.filter(m => 
+        m.title && m.title.toLowerCase().includes(searchTerm)
+    );
+    
+    if (results.length === 0) {
+        // If no results, show loading and search all years
+        moviesSection.innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:50vh;gap:20px;">
+                <div class="loader" style="width:60px;height:60px;border:4px solid var(--bg-lighter);border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite;"></div>
+                <p style="color:var(--text-muted);">Searching all years for "${query}"...</p>
             </div>
-        </div>
-    `;
-    
-    const searchProgressFill = document.getElementById('searchProgressFill');
-    const searchProgressText = document.getElementById('searchProgressText');
-    const searchProgressStatus = document.getElementById('searchProgressStatus');
-    
-    try {
-        const searchTerm = query.toLowerCase().trim();
-        const results = [];
+        `;
         
-        for (let i = 0; i < years.length; i++) {
-            const year = years[i];
-            const percent = Math.floor(((i + 1) / years.length) * 100);
+        try {
+            const years = ['2026', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017', '2016', '2015'];
             
-            if (searchProgressFill) searchProgressFill.style.width = percent + '%';
-            if (searchProgressText) searchProgressText.textContent = percent + '%';
-            if (searchProgressStatus) searchProgressStatus.textContent = `Searching ${year}... (${i + 1}/${years.length})`;
-            
-            try {
-                const response = await fetch(`${API_BASE}/api/${currentSource}/movies?category=${year}`);
-                if (!response.ok) continue;
-                
-                const text = await response.text();
-                if (!text || text.trim() === '' || !text.startsWith('[')) continue;
-                
-                const movies = JSON.parse(text);
-                if (Array.isArray(movies)) {
-                    const filtered = movies.filter(m => 
-                        m.title && m.title.toLowerCase().includes(searchTerm)
-                    );
-                    results.push(...filtered);
-                }
-            } catch (e) {}
-        }
-        
-        if (results.length === 0) {
-            moviesSection.innerHTML = `<p style="text-align:center;color:#b3b3b3;padding:50px;">No movies found for "${query}"</p>`;
-        } else {
-            allMovies = results;
-            heroMovies = results.slice(0, 5);
-            createHeroIndicators();
-            if (heroMovies.length > 0) {
-                updateHeroSection(heroMovies[0]);
+            for (const year of years) {
+                try {
+                    const response = await fetch(`${API_BASE}/api/${currentSource}/movies?category=${year}`);
+                    if (!response.ok) continue;
+                    
+                    const text = await response.text();
+                    if (!text || text.trim() === '' || !text.startsWith('[')) continue;
+                    
+                    const movies = JSON.parse(text);
+                    if (Array.isArray(movies)) {
+                        const filtered = movies.filter(m => 
+                            m.title && m.title.toLowerCase().includes(searchTerm)
+                        );
+                        results.push(...filtered);
+                    }
+                } catch (e) {}
             }
-            
-            createMovieRows(results);
+        } catch (error) {}
+    }
+    
+    if (results.length === 0) {
+        moviesSection.innerHTML = `<p style="text-align:center;color:#b3b3b3;padding:50px;">No movies found for "${query}"</p>`;
+    } else {
+        // Remove duplicates
+        const seen = new Set();
+        results = results.filter(m => {
+            if (seen.has(m.link)) return false;
+            seen.add(m.link);
+            return true;
+        });
+        
+        allMovies = results;
+        heroMovies = results.slice(0, 5);
+        createHeroIndicators();
+        if (heroMovies.length > 0) {
+            updateHeroSection(heroMovies[0]);
         }
         
-        closeMobileMenu();
-    } catch (error) {
-        moviesSection.innerHTML = '<p style="text-align:center;color:#e50914;padding:50px;">Search failed. Please try again.</p>';
+        createMovieRows(results);
     }
+    
+    closeMobileMenu();
 }
 
 function createMovieCard(movie, showRemove = false) {

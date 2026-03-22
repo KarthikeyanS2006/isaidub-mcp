@@ -310,7 +310,7 @@ async function fetchMovies() {
     hideSplash();
     
     try {
-        const source = 'moviesda';
+        const source = currentSource;
         const url = `${API_BASE}/api/${source}/movies?category=${currentCategory}`;
         const response = await fetch(url);
         const data = await response.json();

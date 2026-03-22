@@ -652,11 +652,26 @@ async function searchMovies(query) {
     myListSection.style.display = 'none';
     
     try {
-        // Server-side search for all years
-        const response = await fetch(`${API_BASE}/api/${currentSource}/search?q=${encodeURIComponent(query)}`);
-        const results = await response.json();
+        const searchTerm = query.toLowerCase().trim();
         
-        if (!Array.isArray(results) || results.length === 0) {
+        // Fetch all movies from all years for search
+        const years = ['2026', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017', '2016', '2015'];
+        const results = [];
+        
+        for (const year of years) {
+            try {
+                const response = await fetch(`${API_BASE}/api/${currentSource}/movies?category=${year}`);
+                const movies = await response.json();
+                if (Array.isArray(movies)) {
+                    const filtered = movies.filter(m => 
+                        m.title.toLowerCase().includes(searchTerm)
+                    );
+                    results.push(...filtered);
+                }
+            } catch (e) {}
+        }
+        
+        if (results.length === 0) {
             moviesSection.innerHTML = `<p style="text-align:center;color:#b3b3b3;padding:50px;">No movies found for "${query}"</p>`;
         } else {
             allMovies = results;

@@ -41,109 +41,135 @@ async function extractLinks($, selector) {
   return links;
 }
 
-async function getQualityPage(movieUrl, quality) {
+async function getISAIDUBDownloadLinks(movieUrl) {
+  const result = { download: [], watch: [], info: {} };
+  
   try {
-    const { data } = await axios.get(movieUrl);
-    const $ = cheerio.load(data);
+    // Step 1: Get movie page, find original link
+    const moviePage = await axios.get(movieUrl, axiosConfig);
+    const $ = cheerio.load(moviePage.data);
     
-    const allLinks = await extractLinks($, ".f a");
+    const allLinks = [];
+    $("a").each((_, el) => {
+      const href = $(el).attr("href");
+      const text = $(el).text().trim();
+      if (href) allLinks.push({ href, text });
+    });
+    
+    // Find original link
     const originalLink = allLinks.find(l => l.text.toLowerCase().includes("original"));
-    
     if (!originalLink) return null;
     
     const origUrl = originalLink.href.startsWith("http") 
       ? originalLink.href 
       : SOURCES.isaidub + originalLink.href;
     
-    const { data: origData } = await axios.get(origUrl);
-    const $orig = cheerio.load(origData);
+    // Step 2: Get original page, find quality links
+    const origPage = await axios.get(origUrl, axiosConfig);
+    const $orig = cheerio.load(origPage.data);
     
-    const origLinks = await extractLinks($orig, ".f a");
-    const qualityLink = origLinks.find(l => l.text.toLowerCase().includes(quality.toLowerCase()));
-    
-    if (!qualityLink) return null;
-    
-    return qualityLink.href.startsWith("http") 
-      ? qualityLink.href 
-      : SOURCES.isaidub + qualityLink.href;
-  } catch {
-    return null;
-  }
-}
-
-async function getDubmvPage(qualityPageUrl) {
-  try {
-    const { data } = await axios.get(qualityPageUrl);
-    const $ = cheerio.load(data);
-    
-    const allLinks = await extractLinks($, "a");
-    const downloadLink = allLinks.find(l => l.href.includes("/download/page/"));
-    
-    if (!downloadLink) return null;
-    
-    const dlUrl = downloadLink.href.startsWith("http") 
-      ? downloadLink.href 
-      : SOURCES.isaidub + downloadLink.href;
-    
-    const { data: dlData } = await axios.get(dlUrl, {
-      headers: { "Referer": SOURCES.isaidub + "/" }
-    });
-    const $dl = cheerio.load(dlData);
-    
-    const dlLinks = await extractLinks($dl, "div.dlink a");
-    const dubpageLink = dlLinks.find(l => l.href.includes("dubpage.xyz"));
-    
-    if (!dubpageLink) return null;
-    
-    const { data: dubpageData } = await axios.get(dubpageLink.href, {
-      headers: { "Referer": SOURCES.isaidub + "/" }
-    });
-    const $dubpage = cheerio.load(dubpageData);
-    
-    const dubpageLinks = await extractLinks($dubpage, "div.dlink a");
-    const dubmvLink = dubpageLinks.find(l => l.href.includes("dubmv.top"));
-    
-    if (!dubmvLink) return null;
-    
-    return dubmvLink.href;
-  } catch {
-    return null;
-  }
-}
-
-async function getFinalLinks(dubmvUrl) {
-  try {
-    const { data } = await axios.get(dubmvUrl, {
-      headers: { "Referer": "https://dubpage.xyz/" }
-    });
-    const $ = cheerio.load(data);
-    
-    const result = {
-      download: [],
-      watch: [],
-      info: {}
-    };
-    
-    $("a[href*='uptodub']").each((_, el) => {
-      result.download.push({ server: "Uptodub", url: $(el).attr("href") });
-    });
-    
-    $("a[href*='onestream']").each((_, el) => {
-      result.watch.push({ server: "Onestream", url: $(el).attr("href") });
-    });
-    
-    $(".details").each((_, el) => {
-      const text = $(el).text().trim();
-      const keyMatch = text.match(/^(File Name|File Size|Video Size|Format|Duration|Added On)/);
-      if (keyMatch) {
-        const key = keyMatch[1].toLowerCase().replace(/ /g, "_");
-        const value = text.replace(keyMatch[1], "").replace(/<[^>]*>/g, "").trim();
-        result.info[key] = value;
+    const qualityLinks = [];
+    $orig("a").each((_, el) => {
+      const href = $orig(el).attr("href");
+      const text = $orig(el).text().trim();
+      if (href && href.includes("-movie-") && (text.includes("720p") || text.includes("1080p") || text.includes("360p"))) {
+        qualityLinks.push({ href: href.startsWith("http") ? href : SOURCES.isaidub + href, text });
       }
     });
     
-    return result;
-  } catch {
+    if (qualityLinks.length === 0) {
+      // Try any movie link
+      $orig("a").each((_, el) => {
+        const href = $orig(el).attr("href");
+        const text = $orig(el).text().trim();
+        if (href && href.includes("-movie-")) {
+          qualityLinks.push({ href: href.startsWith("http") ? href : SOURCES.isaidub + href, text });
+        }
+      });
+    }
+    
+    // Step 3: Get quality page, find download page link
+    for (const ql of qualityLinks.slice(0, 2)) {
+      try {
+        const qualityPage = await axios.get(ql.href, axiosConfig);
+        const $q = cheerio.load(qualityPage.data);
+        
+        // Find /download/page/ link
+        let downloadPageUrl = null;
+        $q("a").each((_, el) => {
+          const href = $q(el).attr("href");
+          if (href && href.includes("/download/page/")) {
+            downloadPageUrl = href.startsWith("http") ? href : SOURCES.isaidub + href;
+          }
+        });
+        
+        if (!downloadPageUrl) continue;
+        
+        // Step 4: Get download page, find dubpage.xyz link
+        const dlPage = await axios.get(downloadPageUrl, {
+          ...axiosConfig,
+          headers: { ...axiosConfig.headers, "Referer": SOURCES.isaidub + "/" }
+        });
+        const $dl = cheerio.load(dlPage.data);
+        
+        let dubpageUrl = null;
+        $dl("a").each((_, el) => {
+          const href = $dl(el).attr("href");
+          if (href && href.includes("dubpage.xyz")) {
+            dubpageUrl = href;
+          }
+        });
+        
+        if (!dubpageUrl) continue;
+        
+        // Step 5: Get dubpage.xyz, find dubmv.top link
+        const dubpage = await axios.get(dubpageUrl, {
+          ...axiosConfig,
+          headers: { ...axiosConfig.headers, "Referer": downloadPageUrl }
+        });
+        const $db = cheerio.load(dubpage.data);
+        
+        let dubmvUrl = null;
+        $db("a").each((_, el) => {
+          const href = $db(el).attr("href");
+          if (href && href.includes("dubmv.top")) {
+            dubmvUrl = href;
+          }
+        });
+        
+        if (!dubmvUrl) continue;
+        
+        // Step 6: Get dubmv.top, find direct download links
+        const dubmv = await axios.get(dubmvUrl, {
+          ...axiosConfig,
+          headers: { ...axiosConfig.headers, "Referer": dubpageUrl }
+        });
+        const $dm = cheerio.load(dubmv.data);
+        
+        // Get direct download links
+        $dm("a").each((_, el) => {
+          const href = $dm(el).attr("href");
+          if (href && (href.includes("dubshare") || href.includes(".mp4") || href.includes(".mkv"))) {
+            result.download.push({ server: ql.text || "Download", url: href });
+          }
+        });
+        
+        // Get watch online links
+        $dm("a").each((_, el) => {
+          const href = $dm(el).attr("href");
+          if (href && href.includes("onestream")) {
+            result.watch.push({ server: "Onestream", url: href });
+          }
+        });
+        
+      } catch (e) {
+        console.log("Error in ISAIDUB chain:", e.message);
+      }
+    }
+    
+    return result.download.length > 0 || result.watch.length > 0 ? result : null;
+  } catch (e) {
+    console.log("ISAIDUB error:", e.message);
     return null;
   }
 }
@@ -271,35 +297,25 @@ app.get('/api/isaidub/qualities', async (req, res) => {
 });
 
 app.get('/api/isaidub/download', async (req, res) => {
-  const { url, quality } = req.query;
+  const { url } = req.query;
   
   if (!url) {
     return res.status(400).json({ error: "URL parameter is required" });
   }
   
-  const qual = quality || "720p";
-  
   try {
-    const qualityPage = await getQualityPage(url, qual);
-    if (!qualityPage) {
-      return res.status(404).json({ error: `Could not find ${qual} quality page` });
+    const result = await getISAIDUBDownloadLinks(url);
+    
+    if (!result || (result.download.length === 0 && result.watch.length === 0)) {
+      return res.json({ 
+        error: "No download links found. Movie may be new or links not available.",
+        download: [],
+        watch: [],
+        info: {}
+      });
     }
 
-    const dubmvPage = await getDubmvPage(qualityPage);
-    if (!dubmvPage) {
-      return res.status(404).json({ error: "Could not find download server page" });
-    }
-
-    const finalLinks = await getFinalLinks(dubmvPage);
-    if (!finalLinks || (finalLinks.download.length === 0 && finalLinks.watch.length === 0)) {
-      return res.status(404).json({ error: "Could not extract final links" });
-    }
-
-    res.json({
-      movie_url: url,
-      quality: qual,
-      ...finalLinks,
-    });
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

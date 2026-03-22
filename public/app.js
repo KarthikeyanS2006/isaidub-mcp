@@ -1011,7 +1011,7 @@ async function fetchMoviesdaDownloadLinks(url) {
 
 function openModal(movie) {
     currentMovieUrl = movie.link;
-    currentSource = 'moviesda'; // Always use Moviesda
+    currentSource = movie.source || 'moviesda';
     modalTitle.textContent = movie.title;
     
     if (movie.thumbnail) {

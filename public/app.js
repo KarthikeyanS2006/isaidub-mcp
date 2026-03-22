@@ -849,7 +849,7 @@ async function fetchISAIDUBDownloadLinks(url, quality) {
     fileInfo.style.display = 'none';
     
     try {
-        const response = await fetch(`${API_BASE}/api/isaidub/download?url=${encodeURIComponent(url)}&quality=${quality}`);
+        const response = await fetch(`${API_BASE}/api/isaidub/download?url=${encodeURIComponent(url)}`);
         const data = await response.json();
         
         if (data.error) {
@@ -862,7 +862,11 @@ async function fetchISAIDUBDownloadLinks(url, quality) {
         
         if (data.download && data.download.length > 0) {
             data.download.forEach(link => {
-                html += `<a href="${link.url}" target="_blank" class="download-btn">${link.server} - Download</a>`;
+                const downloadUrl = link.mp4Url || link.url;
+                html += `<a href="${downloadUrl}" download="${link.server}.mp4" target="_blank" class="download-btn">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                    ${link.server}
+                </a>`;
             });
         }
         
@@ -893,25 +897,15 @@ async function fetchMoviesdaDownloadLinks(url) {
         const response = await fetch(`${API_BASE}/api/moviesda/download?url=${encodeURIComponent(url)}`);
         const data = await response.json();
         
-        if (data.info && Object.keys(data.info).length > 0) {
-            let infoHtml = '<div class="file-info-grid">';
-            if (data.info.file_name) infoHtml += `<div><strong>File:</strong> ${data.info.file_name}</div>`;
-            if (data.info.file_size) infoHtml += `<div><strong>Size:</strong> ${data.info.file_size}</div>`;
-            if (data.info.duration) infoHtml += `<div><strong>Duration:</strong> ${data.info.duration}</div>`;
-            if (data.info.video_resolution) infoHtml += `<div><strong>Quality:</strong> ${data.info.video_resolution}</div>`;
-            infoHtml += '</div>';
-            fileInfo.innerHTML = infoHtml;
-            fileInfo.style.display = 'block';
-        }
-        
         let html = '';
         
         if (data.download && data.download.length > 0) {
             html += '<h4 style="color:var(--primary);margin:15px 0 10px;">Download Links</h4>';
             data.download.forEach(link => {
-                html += `<a href="${link.url}" download="${link.server}.mp4" target="_blank" class="download-btn">
+                const downloadUrl = link.mp4Url || link.url;
+                html += `<a href="${downloadUrl}" download="${link.server}.mp4" target="_blank" class="download-btn">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-                    ${link.server} - Direct Download
+                    ${link.server}
                 </a>`;
             });
         }

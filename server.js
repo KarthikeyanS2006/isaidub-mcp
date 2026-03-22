@@ -15,11 +15,47 @@ const SOURCES = {
 const axiosConfig = {
   timeout: 30000,
   headers: {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9',
     'Accept-Language': 'en-US,en;q=0.5',
   }
 };
+
+async function getMp4Url(url, maxRedirects = 5) {
+  let currentUrl = url;
+  
+  for (let attempts = 0; attempts < maxRedirects; attempts++) {
+    try {
+      const response = await axios.get(currentUrl, axiosConfig);
+      const html = response.data;
+      
+      const mp4Match = html.match(/https?:\/\/[^\s"'<>]+\.mp4[^\s"'<>]*/i);
+      if (mp4Match) {
+        return mp4Match[0];
+      }
+      
+      const $ = cheerio.load(html);
+      
+      const dlink = $('div.dlink a').first().attr('href');
+      if (dlink) {
+        currentUrl = dlink.startsWith('http') ? dlink : new URL(dlink, currentUrl).href;
+        continue;
+      }
+      
+      const anyDownload = $('a[href*="download"]').first().attr('href');
+      if (anyDownload) {
+        currentUrl = anyDownload.startsWith('http') ? anyDownload : new URL(anyDownload, currentUrl).href;
+        continue;
+      }
+      
+      break;
+    } catch (error) {
+      break;
+    }
+  }
+  
+  return null;
+}
 
 app.use(cors());
 app.use(express.json());
@@ -31,23 +67,16 @@ app.get('/', (req, res) => {
 app.use('/styles.css', express.static(path.join(process.cwd(), 'public', 'styles.css')));
 app.use('/app.js', express.static(path.join(process.cwd(), 'public', 'app.js')));
 
-async function extractLinks($, selector) {
-  const links = [];
-  $(selector).each((_, el) => {
-    const href = $(el).attr("href");
-    const text = $(el).text().trim();
-    if (href) links.push({ href, text });
-  });
-  return links;
-}
+// =====================
+// ISAIDUB API
+// =====================
 
-// ISAIDUB API - Tamil Dubbed Movies
 app.get('/api/isaidub/movies', async (req, res) => {
-  const { url } = req.query;
-  const targetUrl = url || `${SOURCES.isaidub}/tamil-2026-dubbed-movies/`;
+  const { category = '2026' } = req.query;
+  const targetUrl = `${SOURCES.isaidub}/tamil-${category}-dubbed-movies/`;
   
   try {
-    const { data } = await axios.get(targetUrl);
+    const { data } = await axios.get(targetUrl, axiosConfig);
     const $ = cheerio.load(data);
     const movies = [];
 
@@ -55,23 +84,12 @@ app.get('/api/isaidub/movies', async (req, res) => {
       const href = $(el).attr("href");
       const title = $(el).text().replace("[+]", "").trim();
       
-      let thumbnail = null;
-      const yearMatch = title.match(/\((\d{4})\)/);
-      const year = yearMatch ? yearMatch[1] : '';
-      const nameForUrl = title.toLowerCase()
-        .replace(/[^a-z0-9\s]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-');
-      
-      if (year) {
-        thumbnail = `${SOURCES.isaidub}/uploads/posters/${nameForUrl}.jpg`;
-      }
-      
-      if (href && title && !title.match(/^(Download|Tamil|Home|Contact|Check)/i)) {
+      if (href && href.includes("/movie/") && title && !title.match(/^(Download|Tamil|Home|Contact|Check)/i)) {
         movies.push({
           title,
           link: href.startsWith("http") ? href : SOURCES.isaidub + href,
-          thumbnail: thumbnail
+          thumbnail: null,
+          source: 'isaidub'
         });
       }
     });
@@ -90,7 +108,7 @@ app.get('/api/isaidub/search', async (req, res) => {
   }
   
   try {
-    const { data } = await axios.get(`${SOURCES.isaidub}/?s=${encodeURIComponent(q)}`);
+    const { data } = await axios.get(`${SOURCES.isaidub}/?s=${encodeURIComponent(q)}`, axiosConfig);
     const $ = cheerio.load(data);
     const results = [];
 
@@ -98,112 +116,17 @@ app.get('/api/isaidub/search', async (req, res) => {
       const href = $(el).attr("href");
       const title = $(el).text().replace("[+]", "").trim();
       
-      let thumbnail = null;
-      const yearMatch = title.match(/\((\d{4})\)/);
-      const year = yearMatch ? yearMatch[1] : '';
-      const nameForUrl = title.toLowerCase()
-        .replace(/[^a-z0-9\s]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-');
-      
-      if (year) {
-        thumbnail = `${SOURCES.isaidub}/uploads/posters/${nameForUrl}.jpg`;
-      }
-      
-      if (href && title && !title.match(/^(Download|Tamil|Home|Contact|Check)/i)) {
+      if (href && href.includes("/movie/") && title && !title.match(/^(Download|Tamil|Home|Contact|Check)/i)) {
         results.push({
           title,
           link: href.startsWith("http") ? href : SOURCES.isaidub + href,
-          thumbnail: thumbnail
+          thumbnail: null,
+          source: 'isaidub'
         });
       }
     });
 
     res.json(results);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/api/isaidub/qualities', async (req, res) => {
-  const { url } = req.query;
-  
-  if (!url) {
-    return res.status(400).json({ error: "URL parameter is required" });
-  }
-  
-  try {
-    const { data } = await axios.get(url);
-    const $ = cheerio.load(data);
-    const allLinks = await extractLinks($, ".f a");
-    const originalLink = allLinks.find(l => l.text.toLowerCase().includes("original"));
-    
-    if (!originalLink) {
-      return res.json({ qualities: [] });
-    }
-    
-    const origUrl = originalLink.href.startsWith("http") 
-      ? originalLink.href 
-      : SOURCES.isaidub + originalLink.href;
-    
-    const { data: origData } = await axios.get(origUrl);
-    const $orig = cheerio.load(origData);
-    
-    const origLinks = await extractLinks($orig, ".f a");
-    const qualities = origLinks
-      .filter(l => l.text.match(/\d{3,4}p/i))
-      .map(l => ({
-        quality: l.text.match(/(\d{3,4}p)/i)?.[1] || l.text,
-        url: l.href.startsWith("http") ? l.href : SOURCES.isaidub + l.href
-      }));
-    
-    res.json({ qualities });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/api/isaidub/download', async (req, res) => {
-  const { url } = req.query;
-  
-  if (!url) {
-    return res.status(400).json({ error: "URL parameter is required" });
-  }
-  
-  try {
-    // Get movie page and find quality page links
-    const moviePage = await axios.get(url, axiosConfig);
-    const $ = cheerio.load(moviePage.data);
-    
-    const result = {
-      download: [],
-      watch: [],
-      info: {}
-    };
-    
-    // Find quality page links
-    $("a").each((_, el) => {
-      const href = $(el).attr("href");
-      const text = $(el).text().trim();
-      if (href && href.includes("-movie-") && !href.includes("/download/")) {
-        const fullUrl = href.startsWith("http") ? href : SOURCES.isaidub + href;
-        result.download.push({
-          server: text || "Quality Page",
-          url: fullUrl
-        });
-      }
-    });
-    
-    if (result.download.length === 0) {
-      return res.json({ 
-        error: "No quality pages found. Movie may be removed.",
-        download: [],
-        watch: [],
-        info: {}
-      });
-    }
-
-    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -217,7 +140,7 @@ app.get('/api/isaidub/details', async (req, res) => {
   }
   
   try {
-    const { data } = await axios.get(url);
+    const { data } = await axios.get(url, axiosConfig);
     const $ = cheerio.load(data);
     
     const details = {
@@ -226,49 +149,29 @@ app.get('/api/isaidub/details', async (req, res) => {
       director: '',
       starring: '',
       quality: '',
-      language: '',
+      language: 'Tamil',
       rating: '',
-      updated: '',
       synopsis: '',
-      thumbnail: null
+      thumbnail: null,
+      qualities: []
     };
     
-    details.title = $('title').text().split('(')[0].trim() || $('h1').first().text().trim() || '';
+    details.title = $('title').text().split('(')[0].trim() || '';
     
-    const posterImg = $('ul.movie-info img').attr('src') || $('img[alt*="poster"]').attr('src') || $('picture img').attr('src');
-    if (posterImg) {
-      details.thumbnail = posterImg.startsWith('http') ? posterImg : SOURCES.isaidub + posterImg;
-    }
+    const img = $('img[src*="poster"]').attr('src') || $('img[alt*="poster"]').attr('src');
+    if (img) details.thumbnail = img.startsWith('http') ? img : SOURCES.isaidub + img;
     
-    $('ul.movie-info li').each((_, el) => {
-      const text = $(el).text();
-      if (text.includes('Director:')) {
-        details.director = $(el).find('span').text().trim();
-      }
-      if (text.includes('Starring:')) {
-        details.starring = $(el).find('span').text().trim();
-      }
-      if (text.includes('Genres:')) {
-        details.genres = $(el).find('span').text().trim();
-      }
-      if (text.includes('Quality:')) {
-        details.quality = $(el).find('span').text().trim();
-      }
-      if (text.includes('Language:')) {
-        details.language = $(el).find('span').text().trim();
-      }
-      if (text.includes('Movie Rating:')) {
-        details.rating = $(el).find('span').text().trim();
-      }
-      if (text.includes('Last Updated:')) {
-        details.updated = $(el).find('span').text().trim();
+    $("a").each((_, el) => {
+      const href = $(el).attr("href");
+      const text = $(el).text().trim();
+      
+      if (href && href.includes("-movie-") && !href.includes("/download/")) {
+        details.qualities.push({
+          quality: text || 'Quality',
+          url: href.startsWith("http") ? href : SOURCES.isaidub + href
+        });
       }
     });
-    
-    const synopsisText = $('.movie-synopsis').text() || '';
-    if (synopsisText) {
-      details.synopsis = synopsisText.replace(/^Synopsis:\s*/i, '').trim();
-    }
     
     res.json(details);
   } catch (error) {
@@ -276,45 +179,151 @@ app.get('/api/isaidub/details', async (req, res) => {
   }
 });
 
-// MOVIESDA API - Tamil Movies
-app.get('/api/moviesda/movies', async (req, res) => {
+app.get('/api/isaidub/download', async (req, res) => {
   const { url } = req.query;
-  const targetUrl = url || `${SOURCES.moviesda}/tamil-2026-movies/`;
+  
+  if (!url) {
+    return res.status(400).json({ error: "URL parameter is required" });
+  }
   
   try {
-    const { data } = await axios.get(targetUrl);
+    const { data } = await axios.get(url, axiosConfig);
     const $ = cheerio.load(data);
-    const movies = [];
-
-    $(".f a").each((_, el) => {
+    
+    const result = { download: [], watch: [], info: {} };
+    const seenPages = new Set();
+    const seenDownloads = new Set();
+    const qualityQueue = [];
+    
+    $("a").each((_, el) => {
       const href = $(el).attr("href");
-      const title = $(el).text().replace("[+]", "").trim();
-      
-      let thumbnail = null;
-      const yearMatch = title.match(/\((\d{4})\)/);
-      const year = yearMatch ? yearMatch[1] : '';
-      const nameForUrl = title.toLowerCase()
-        .replace(/[^a-z0-9\s]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-');
-      
-      if (year) {
-        thumbnail = `${SOURCES.moviesda}/uploads/posters/${nameForUrl}.jpg`;
-      }
-      
-      if (href && title && !title.match(/^(Home|Download|Tamil)/i)) {
-        movies.push({
-          title,
-          link: href.startsWith("http") ? href : SOURCES.moviesda + href,
-          thumbnail: thumbnail
-        });
+      const text = $(el).text().trim();
+      if (href && href.includes("-movie-") && !href.includes("/download/")) {
+        const fullUrl = href.startsWith("http") ? href : SOURCES.isaidub + href;
+        if (!seenPages.has(fullUrl)) {
+          seenPages.add(fullUrl);
+          qualityQueue.push({ quality: text || 'Quality', url: fullUrl });
+        }
       }
     });
-
-    res.json(movies);
+    
+    $("a.coral").each((_, el) => {
+      const href = $(el).attr("href");
+      const text = $(el).text().trim();
+      if (href) {
+        const dlUrl = href.startsWith("http") ? href : SOURCES.isaidub + href;
+        if (!seenDownloads.has(dlUrl)) {
+          seenDownloads.add(dlUrl);
+          result.download.push({ server: text || 'Download', url: dlUrl, mp4Url: null });
+        }
+      }
+    });
+    
+    let queueIndex = 0;
+    while (queueIndex < qualityQueue.length) {
+      const qpage = qualityQueue[queueIndex++];
+      
+      try {
+        const qdata = await axios.get(qpage.url, axiosConfig);
+        const $q = cheerio.load(qdata.data);
+        
+        $q("a.coral").each((_, el) => {
+          const href = $(el).attr("href");
+          const text = $(el).text().trim();
+          if (href) {
+            const dlUrl = href.startsWith("http") ? href : SOURCES.isaidub + href;
+            if (!seenDownloads.has(dlUrl)) {
+              seenDownloads.add(dlUrl);
+              result.download.push({ server: text || qpage.quality, url: dlUrl, mp4Url: null });
+            }
+          }
+        });
+        
+        $q("a").each((_, el) => {
+          const href = $(el).attr("href");
+          const text = $(el).text().trim();
+          if (href && href.includes("-movie-") && !href.includes("/download/")) {
+            const fullUrl = href.startsWith("http") ? href : SOURCES.isaidub + href;
+            if (!seenPages.has(fullUrl)) {
+              seenPages.add(fullUrl);
+              qualityQueue.push({ quality: text || 'Quality', url: fullUrl });
+            }
+          }
+        });
+      } catch (e) {}
+    }
+    
+    for (const item of result.download) {
+      const mp4Url = await getMp4Url(item.url);
+      if (mp4Url) {
+        item.mp4Url = mp4Url;
+      }
+    }
+    
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// =====================
+// MOVIESDA API
+// =====================
+
+app.get('/api/moviesda/movies', async (req, res) => {
+  const { category = '2026' } = req.query;
+  const years = [category, String(parseInt(category) - 1), String(parseInt(category) - 2)];
+  const movies = [];
+  const seenLinks = new Set();
+
+  for (const year of years) {
+    for (let page = 1; page <= 3; page++) {
+      const targetUrl = page === 1 
+        ? `${SOURCES.moviesda}/tamil-${year}-movies/`
+        : `${SOURCES.moviesda}/tamil-${year}-movies/?page=${page}`;
+
+      try {
+        const { data } = await axios.get(targetUrl, axiosConfig);
+        const $ = cheerio.load(data);
+        
+        let foundMovies = 0;
+
+        $("div.f a").each((_, el) => {
+          const href = $(el).attr("href");
+          const title = $(el).text().replace("[+]", "").trim();
+
+          if (href && title && href.includes('movie') && !title.match(/^(Home|Download|Tamil)/i) && !seenLinks.has(href)) {
+            seenLinks.add(href);
+            const yearMatch = title.match(/\((\d{4})\)/);
+            const movieYear = yearMatch ? yearMatch[1] : year;
+            const nameForUrl = title.toLowerCase()
+              .replace(/[^a-z0-9\s]/g, '')
+              .replace(/\s+/g, '-')
+              .replace(/-+/g, '-');
+
+            const thumbnail = movieYear
+              ? `${SOURCES.moviesda}/uploads/posters/${nameForUrl}.jpg`
+              : null;
+
+            movies.push({
+              title,
+              link: href.startsWith("http") ? href : SOURCES.moviesda + href,
+              thumbnail: thumbnail,
+              year: movieYear,
+              source: 'moviesda'
+            });
+            foundMovies++;
+          }
+        });
+        
+        if (foundMovies === 0 && page > 1) break;
+      } catch (error) {
+        break;
+      }
+    }
+  }
+
+  res.json(movies);
 });
 
 app.get('/api/moviesda/search', async (req, res) => {
@@ -325,7 +334,7 @@ app.get('/api/moviesda/search', async (req, res) => {
   }
   
   try {
-    const { data } = await axios.get(`${SOURCES.moviesda}/?s=${encodeURIComponent(q)}`);
+    const { data } = await axios.get(`${SOURCES.moviesda}/?s=${encodeURIComponent(q)}`, axiosConfig);
     const $ = cheerio.load(data);
     const results = [];
 
@@ -333,30 +342,30 @@ app.get('/api/moviesda/search', async (req, res) => {
       const href = $(el).attr("href");
       const title = $(el).text().replace("[+]", "").trim();
       
-      let thumbnail = null;
-      const yearMatch = title.match(/\((\d{4})\)/);
-      const year = yearMatch ? yearMatch[1] : '';
-      const nameForUrl = title.toLowerCase()
-        .replace(/[^a-z0-9\s]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-');
-      
-      if (year) {
-        thumbnail = `${SOURCES.moviesda}/uploads/posters/${nameForUrl}.jpg`;
-      }
-      
-      if (href && title && !title.match(/^(Home|Download|Tamil)/i)) {
+      if (href && title && href.includes('movie') && !title.match(/^(Home|Download|Tamil)/i)) {
+        const yearMatch = title.match(/\((\d{4})\)/);
+        const year = yearMatch ? yearMatch[1] : '';
+        const nameForUrl = title.toLowerCase()
+          .replace(/[^a-z0-9\s]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-');
+        
+        const thumbnail = year 
+          ? `${SOURCES.moviesda}/uploads/posters/${nameForUrl}.jpg`
+          : null;
+        
         results.push({
           title,
           link: href.startsWith("http") ? href : SOURCES.moviesda + href,
-          thumbnail: thumbnail
+          thumbnail: thumbnail,
+          source: 'moviesda'
         });
       }
     });
 
     res.json(results);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.json([]);
   }
 });
 
@@ -430,50 +439,7 @@ app.get('/api/moviesda/details', async (req, res) => {
       }
     });
     
-    // Also check for links directly
-    if (details.qualities.length === 0) {
-      $("a").each((_, el) => {
-        const href = $(el).attr("href");
-        const text = $(el).text().trim();
-        if (href && href.match(/\/[^\/]+-movie\//)) {
-          details.qualities.push({
-            quality: text || 'Quality',
-            url: href.startsWith("http") ? href : SOURCES.moviesda + href
-          });
-        }
-      });
-    }
-    
     res.json(details);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/api/moviesda/qualities', async (req, res) => {
-  const { url } = req.query;
-  
-  if (!url) {
-    return res.status(400).json({ error: "URL parameter is required" });
-  }
-  
-  try {
-    const { data } = await axios.get(url, axiosConfig);
-    const $ = cheerio.load(data);
-    const qualities = [];
-
-    $("div.f a").each((_, el) => {
-      const href = $(el).attr("href");
-      const text = $(el).text().trim();
-      if (href && href.includes('-movie')) {
-        qualities.push({
-          quality: text || 'Quality',
-          url: href.startsWith("http") ? href : SOURCES.moviesda + href
-        });
-      }
-    });
-
-    res.json({ qualities });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -487,58 +453,88 @@ app.get('/api/moviesda/download', async (req, res) => {
   }
   
   try {
-    // Get the movie/quality page
-    const page = await axios.get(url, axiosConfig);
-    const $ = cheerio.load(page.data);
+    const { data } = await axios.get(url, axiosConfig);
+    const $ = cheerio.load(data);
     
-    const result = {
-      download: [],
-      watch: [],
-      info: {}
-    };
+    const result = { download: [], watch: [], info: {} };
+    const seenPages = new Set();
+    const seenDownloads = new Set();
+    const qualityQueue = [];
     
-    // Get file info
-    $('div.details').each((_, el) => {
-      const text = $(el).text().trim();
-      if (text.includes('File Name:')) result.info.file_name = text.replace('File Name:', '').trim();
-      if (text.includes('File Size:')) result.info.file_size = text.replace('File Size:', '').trim();
-      if (text.includes('Duration:')) result.info.duration = text.replace('Duration:', '').trim();
-      if (text.includes('Video Resolution:')) result.info.video_resolution = text.replace('Video Resolution:', '').trim();
-    });
-    
-    // Find quality/download page links
     $("div.f a").each((_, el) => {
-      const href = $(el).attr('href');
+      const href = $(el).attr("href");
       const text = $(el).text().trim();
-      if (href && href.includes('-movie')) {
-        const fullUrl = href.startsWith('http') ? href : SOURCES.moviesda + href;
-        result.download.push({
-          server: text || 'Quality Page',
-          url: fullUrl
-        });
+      if (href && href.includes('-movie') && !href.includes('/download/')) {
+        const url = href.startsWith("http") ? href : SOURCES.moviesda + href;
+        if (!seenPages.has(url)) {
+          seenPages.add(url);
+          qualityQueue.push({ quality: text || 'Quality', url });
+        }
       }
     });
     
-    // Also find .coral download links
     $("a.coral").each((_, el) => {
-      const href = $(el).attr('href');
+      const href = $(el).attr("href");
       const text = $(el).text().trim();
       if (href) {
-        const fullUrl = href.startsWith('http') ? href : SOURCES.moviesda + href;
-        result.download.push({
-          server: text || 'Download Page',
-          url: fullUrl
-        });
+        const url = href.startsWith("http") ? href : SOURCES.moviesda + href;
+        if (!seenDownloads.has(url)) {
+          seenDownloads.add(url);
+          result.download.push({ server: text || 'Download', url, mp4Url: null });
+        }
       }
     });
     
-    // Remove duplicates
-    const seen = new Set();
-    result.download = result.download.filter(d => {
-      if (!d.url || seen.has(d.url)) return false;
-      seen.add(d.url);
-      return true;
-    });
+    let queueIndex = 0;
+    while (queueIndex < qualityQueue.length) {
+      const qpage = qualityQueue[queueIndex++];
+      
+      try {
+        const qdata = await axios.get(qpage.url, axiosConfig);
+        const $q = cheerio.load(qdata.data);
+        
+        $q("a.coral").each((_, el) => {
+          const href = $(el).attr("href");
+          const text = $(el).text().trim();
+          if (href) {
+            const dlUrl = href.startsWith("http") ? href : SOURCES.moviesda + href;
+            if (!seenDownloads.has(dlUrl)) {
+              seenDownloads.add(dlUrl);
+              result.download.push({ server: text || qpage.quality, url: dlUrl, mp4Url: null });
+            }
+          }
+        });
+        
+        $q("div.f a").each((_, el) => {
+          const href = $(el).attr("href");
+          const text = $(el).text().trim();
+          if (href && href.includes('-movie') && !href.includes('/download/')) {
+            const fullUrl = href.startsWith("http") ? href : SOURCES.moviesda + href;
+            if (!seenPages.has(fullUrl)) {
+              seenPages.add(fullUrl);
+              qualityQueue.push({ quality: text || 'Quality', url: fullUrl });
+            }
+          }
+        });
+      } catch (e) {}
+    }
+    
+    const uniqueDownloads = [];
+    const uniqueUrls = new Set();
+    for (const d of result.download) {
+      if (!uniqueUrls.has(d.url)) {
+        uniqueUrls.add(d.url);
+        uniqueDownloads.push(d);
+      }
+    }
+    result.download = uniqueDownloads;
+    
+    for (const item of result.download) {
+      const mp4Url = await getMp4Url(item.url);
+      if (mp4Url) {
+        item.mp4Url = mp4Url;
+      }
+    }
     
     res.json(result);
   } catch (error) {
@@ -546,4 +542,6 @@ app.get('/api/moviesda/download', async (req, res) => {
   }
 });
 
-export default app;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
+});

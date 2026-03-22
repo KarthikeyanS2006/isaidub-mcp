@@ -131,29 +131,49 @@ app.get('/api/isaidub/search', async (req, res) => {
     return res.status(400).json({ error: "Query parameter 'q' is required" });
   }
   
-  try {
-    const { data } = await axios.get(`${SOURCES.isaidub}/?s=${encodeURIComponent(q)}`, axiosConfig);
-    const $ = cheerio.load(data);
-    const results = [];
+  const searchTerm = q.toLowerCase().trim();
+  const results = [];
+  const seenLinks = new Set();
+  const years = ['2026', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017', '2016', '2015'];
+  
+  for (const year of years) {
+    for (let page = 1; page <= 3; page++) {
+      try {
+        const targetUrl = page === 1 
+          ? `${SOURCES.isaidub}/tamil-${year}-dubbed-movies/`
+          : `${SOURCES.isaidub}/tamil-${year}-dubbed-movies/page/${page}/`;
+        
+        const { data } = await axios.get(targetUrl, axiosConfig);
+        const $ = cheerio.load(data);
+        
+        let found = false;
 
-    $(".f a").each((_, el) => {
-      const href = $(el).attr("href");
-      const title = $(el).text().replace("[+]", "").trim();
-      
-      if (href && href.includes("/movie/") && title && !title.match(/^(Download|Tamil|Home|Contact|Check)/i)) {
-        results.push({
-          title,
-          link: href.startsWith("http") ? href : SOURCES.isaidub + href,
-          thumbnail: generateISAIDUBThumbnail(title),
-          source: 'isaidub'
+        $(".f a").each((_, el) => {
+          const href = $(el).attr("href");
+          const title = $(el).text().replace("[+]", "").trim();
+          
+          if (href && href.includes("/movie/") && title && !title.match(/^(Download|Tamil|Home|Contact|Check)/i) && !seenLinks.has(href)) {
+            if (title.toLowerCase().includes(searchTerm)) {
+              seenLinks.add(href);
+              results.push({
+                title,
+                link: href.startsWith("http") ? href : SOURCES.isaidub + href,
+                thumbnail: generateISAIDUBThumbnail(title),
+                source: 'isaidub'
+              });
+              found = true;
+            }
+          }
         });
+        
+        if (!found && page > 1) break;
+      } catch (error) {
+        break;
       }
-    });
-
-    res.json(results);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+    }
   }
+
+  res.json(results);
 });
 
 app.get('/api/isaidub/details', async (req, res) => {
@@ -392,40 +412,57 @@ app.get('/api/moviesda/search', async (req, res) => {
     return res.status(400).json({ error: "Query parameter 'q' is required" });
   }
   
-  try {
-    const { data } = await axios.get(`${SOURCES.moviesda}/?s=${encodeURIComponent(q)}`, axiosConfig);
-    const $ = cheerio.load(data);
-    const results = [];
+  const searchTerm = q.toLowerCase().trim();
+  const results = [];
+  const seenLinks = new Set();
+  const years = ['2026', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017', '2016', '2015'];
+  
+  for (const year of years) {
+    for (let page = 1; page <= 3; page++) {
+      try {
+        const targetUrl = page === 1 
+          ? `${SOURCES.moviesda}/tamil-${year}-movies/`
+          : `${SOURCES.moviesda}/tamil-${year}-movies/?page=${page}`;
+        
+        const { data } = await axios.get(targetUrl, axiosConfig);
+        const $ = cheerio.load(data);
+        
+        let found = false;
 
-    $(".f a").each((_, el) => {
-      const href = $(el).attr("href");
-      const title = $(el).text().replace("[+]", "").trim();
-      
-      if (href && title && href.includes('movie') && !title.match(/^(Home|Download|Tamil)/i)) {
-        const yearMatch = title.match(/\((\d{4})\)/);
-        const year = yearMatch ? yearMatch[1] : '';
-        const nameForUrl = title.toLowerCase()
-          .replace(/[^a-z0-9\s]/g, '')
-          .replace(/\s+/g, '-')
-          .replace(/-+/g, '-');
-        
-        const thumbnail = year 
-          ? `${SOURCES.moviesda}/uploads/posters/${nameForUrl}.jpg`
-          : null;
-        
-        results.push({
-          title,
-          link: href.startsWith("http") ? href : SOURCES.moviesda + href,
-          thumbnail: thumbnail,
-          source: 'moviesda'
+        $("div.f a").each((_, el) => {
+          const href = $(el).attr("href");
+          const title = $(el).text().replace("[+]", "").trim();
+          
+          if (href && title && href.includes('movie') && !title.match(/^(Home|Download|Tamil)/i) && !seenLinks.has(href)) {
+            if (title.toLowerCase().includes(searchTerm)) {
+              seenLinks.add(href);
+              const yearMatch = title.match(/\((\d{4})\)/);
+              const movieYear = yearMatch ? yearMatch[1] : year;
+              const nameForUrl = title.toLowerCase()
+                .replace(/[^a-z0-9\s]/g, '')
+                .replace(/\s+/g, '-')
+                .replace(/-+/g, '-');
+              
+              results.push({
+                title,
+                link: href.startsWith("http") ? href : SOURCES.moviesda + href,
+                thumbnail: `${SOURCES.moviesda}/uploads/posters/${nameForUrl}.jpg`,
+                year: movieYear,
+                source: 'moviesda'
+              });
+              found = true;
+            }
+          }
         });
+        
+        if (!found && page > 1) break;
+      } catch (error) {
+        break;
       }
-    });
-
-    res.json(results);
-  } catch (error) {
-    res.json([]);
+    }
   }
+
+  res.json(results);
 });
 
 app.get('/api/moviesda/details', async (req, res) => {

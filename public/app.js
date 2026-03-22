@@ -646,26 +646,18 @@ function closeTrailerModal() {
 async function searchMovies(query) {
     if (!query.trim()) return;
     
-    // Check if movies are loaded
-    if (allMovies.length === 0) {
-        alert('Please wait for movies to load, then search again');
-        return;
-    }
-    
+    showLoading(true);
     searchSuggestions.style.display = 'none';
     moviesSection.style.display = 'block';
     myListSection.style.display = 'none';
     
     try {
-        const searchTerm = query.toLowerCase().trim();
+        // Server-side search for all years
+        const response = await fetch(`${API_BASE}/api/${currentSource}/search?q=${encodeURIComponent(query)}`);
+        const results = await response.json();
         
-        // Search from all loaded movies (client-side filtering)
-        const results = allMovies.filter(m => 
-            m.title.toLowerCase().includes(searchTerm)
-        );
-        
-        if (results.length === 0) {
-            moviesSection.innerHTML = `<p style="text-align:center;color:#b3b3b3;padding:50px;">No movies found for "${query}"<br><small>Total movies loaded: ${allMovies.length}</small></p>`;
+        if (!Array.isArray(results) || results.length === 0) {
+            moviesSection.innerHTML = `<p style="text-align:center;color:#b3b3b3;padding:50px;">No movies found for "${query}"</p>`;
         } else {
             allMovies = results;
             heroMovies = results.slice(0, 5);
@@ -680,6 +672,8 @@ async function searchMovies(query) {
         closeMobileMenu();
     } catch (error) {
         moviesSection.innerHTML = '<p style="text-align:center;color:#e50914;padding:50px;">Search failed. Please try again.</p>';
+    } finally {
+        showLoading(false);
     }
 }
 

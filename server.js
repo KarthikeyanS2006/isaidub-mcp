@@ -12,6 +12,15 @@ const SOURCES = {
   moviesda: process.env.MOVIESDA_URL || "https://moviesda18.com"
 };
 
+const axiosConfig = {
+  timeout: 30000,
+  headers: {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+  }
+};
+
 app.use(cors());
 app.use(express.json());
 
@@ -455,7 +464,7 @@ app.get('/api/moviesda/details', async (req, res) => {
   }
   
   try {
-    const { data } = await axios.get(url);
+    const { data } = await axios.get(url, axiosConfig);
     const $ = cheerio.load(data);
     
     const details = {
@@ -506,16 +515,30 @@ app.get('/api/moviesda/details', async (req, res) => {
       details.synopsis = synopsisText.replace(/^Synopsis:\s*/i, '').trim();
     }
     
-    $(".f a").each((_, el) => {
+    $("div.f a").each((_, el) => {
       const href = $(el).attr("href");
       const text = $(el).text().trim();
-      if (href && href.includes('-movie-')) {
+      if (href && href.includes('-movie')) {
         details.qualities.push({
           quality: text || 'Quality',
           url: href.startsWith("http") ? href : SOURCES.moviesda + href
         });
       }
     });
+    
+    // Also check for links directly
+    if (details.qualities.length === 0) {
+      $("a").each((_, el) => {
+        const href = $(el).attr("href");
+        const text = $(el).text().trim();
+        if (href && href.match(/\/[^\/]+-movie\//)) {
+          details.qualities.push({
+            quality: text || 'Quality',
+            url: href.startsWith("http") ? href : SOURCES.moviesda + href
+          });
+        }
+      });
+    }
     
     res.json(details);
   } catch (error) {
@@ -531,14 +554,14 @@ app.get('/api/moviesda/qualities', async (req, res) => {
   }
   
   try {
-    const { data } = await axios.get(url);
+    const { data } = await axios.get(url, axiosConfig);
     const $ = cheerio.load(data);
     const qualities = [];
 
-    $(".f a").each((_, el) => {
+    $("div.f a").each((_, el) => {
       const href = $(el).attr("href");
       const text = $(el).text().trim();
-      if (href && href.includes('-movie-')) {
+      if (href && href.includes('-movie')) {
         qualities.push({
           quality: text || 'Quality',
           url: href.startsWith("http") ? href : SOURCES.moviesda + href
@@ -560,7 +583,7 @@ app.get('/api/moviesda/download', async (req, res) => {
   }
   
   try {
-    const { data } = await axios.get(url);
+    const { data } = await axios.get(url, axiosConfig);
     const $ = cheerio.load(data);
     
     const result = {

@@ -631,7 +631,6 @@ app.get('/api/moviesda/download', async (req, res) => {
   }
   
   try {
-    // Fetch the movie page
     const moviePage = await axios.get(url, axiosConfig);
     const $ = cheerio.load(moviePage.data);
     
@@ -641,28 +640,16 @@ app.get('/api/moviesda/download', async (req, res) => {
       info: {}
     };
     
-    // Get movie info
     const title = $('title').text().split('(')[0].replace('Tamil Movie', '').trim();
     if (title) result.info.title = title;
     
-    // Find all links on the movie page
-    const allLinks = [];
+    // Find quality links
+    const qualityLinks = [];
     $('a').each((_, el) => {
       const href = $(el).attr('href');
       const text = $(el).text().trim();
-      if (href) {
-        allLinks.push({ href, text });
-      }
-    });
-    
-    // Find quality page links (Original, 720p, 1080p, HQ PreDVD, etc.)
-    const qualityLinks = [];
-    for (const link of allLinks) {
-      const href = link.href;
-      const text = link.text;
       
-      // Look for quality links
-      if (href.includes('-movie/') && !href.includes('/download/')) {
+      if (href && href.includes('-movie/') && !href.includes('/download/')) {
         const isQuality = text.match(/\d{3,4}p/i) || 
                           text.toLowerCase().includes('hq') || 
                           text.toLowerCase().includes('predvd') ||
@@ -676,107 +663,46 @@ app.get('/api/moviesda/download', async (req, res) => {
           });
         }
       }
-      
-      // Also look for download page links directly
-      if (href.includes('/download/') || href.includes('coral') || href.includes('link')) {
-        qualityLinks.push({
-          quality: text || 'Download',
-          url: href.startsWith('http') ? href : SOURCES.moviesda + href
-        });
-      }
-    }
+    });
     
     // Remove duplicates
     const seenUrls = new Set();
-    const uniqueQualityLinks = qualityLinks.filter(l => {
+    const uniqueLinks = qualityLinks.filter(l => {
       if (seenUrls.has(l.url)) return false;
       seenUrls.add(l.url);
       return true;
     });
     
-    // Process quality links to find direct download URLs
-    for (const ql of uniqueQualityLinks.slice(0, 5)) {
+    // Process first 3 links
+    for (let i = 0; i < Math.min(uniqueLinks.length, 3); i++) {
+      const ql = uniqueLinks[i];
       try {
-        // Fetch the quality/download page
         const qualityPage = await axios.get(ql.url, {
           ...axiosConfig,
-          maxRedirects: 10,
+          maxRedirects: 5,
           validateStatus: (status) => status < 500
         });
         
-        // Check for redirect URL (often the direct file)
-        const finalUrl = qualityPage.request?.res?.responseUrl || ql.url;
-        
-        // If it's a direct file URL
-        if (finalUrl.includes('.mp4') || finalUrl.includes('.mkv') || finalUrl.includes('hotshare')) {
-          result.download.push({
-            server: ql.quality,
-            url: finalUrl
-          });
-          continue;
-        }
-        
         const $q = cheerio.load(qualityPage.data);
         
-        // Find download links on this page
         $q('a').each((_, el) => {
           const href = $q(el).attr('href');
-          const text = $q(el).text().trim();
-          
           if (href) {
-            // Direct video files
-            if (href.includes('.mp4') || href.includes('.mkv')) {
-              result.download.push({
-                server: ql.quality + ' - ' + (text || 'Direct'),
-                url: href.startsWith('http') ? href : SOURCES.moviesda + href
-              });
-            }
-            
-            // Download links (hotshare, etc.)
-            if (href.includes('hotshare') || href.includes('download') || href.includes('link') || href.includes('drive')) {
+            if (href.includes('.mp4') || href.includes('.mkv') || href.includes('hotshare')) {
               result.download.push({
                 server: ql.quality,
                 url: href.startsWith('http') ? href : SOURCES.moviesda + href
               });
             }
-            
-            // Coral/Waste links (common on Moviesda)
-            if (href.includes('coral') || href.includes('wasdt')) {
-              // Follow these links to get the final URL
-              try {
-                const coralPage = await axios.get(href.startsWith('http') ? href : SOURCES.moviesda + href, {
-                  ...axiosConfig,
-                  maxRedirects: 5
-                });
-                const coralFinalUrl = coralPage.request?.res?.responseUrl || href;
-                if (coralFinalUrl && coralFinalUrl !== href) {
-                  result.download.push({
-                    server: ql.quality,
-                    url: coralFinalUrl
-                  });
-                }
-              } catch {}
-            }
-          }
-        });
-        
-        // Also check for li links with download buttons
-        $q('li a, .download a, a.download, a[download]').each((_, el) => {
-          const href = $q(el).attr('href');
-          if (href && !href.includes('moviesda')) {
-            result.download.push({
-              server: ql.quality,
-              url: href.startsWith('http') ? href : SOURCES.moviesda + href
-            });
           }
         });
         
       } catch (e) {
-        console.log('Error on quality page:', ql.quality, e.message);
+        console.log('Error:', ql.quality);
       }
     }
     
-    // Remove duplicates and empty URLs
+    // Remove duplicates
     const seen = new Set();
     result.download = result.download.filter(d => {
       if (!d.url || d.url.length < 10) return false;
@@ -784,14 +710,6 @@ app.get('/api/moviesda/download', async (req, res) => {
       seen.add(d.url);
       return true;
     });
-    
-    if (result.download.length === 0) {
-      return res.json({ 
-        error: "No download links found. The movie links may not be available yet.",
-        movieUrl: url,
-        message: "Try visiting the movie page directly on Moviesda for download options."
-      });
-    }
     
     res.json(result);
   } catch (error) {

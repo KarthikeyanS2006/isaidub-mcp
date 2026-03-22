@@ -662,7 +662,7 @@ async function searchMovies(query) {
         moviesSection.innerHTML = `
             <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:50vh;gap:20px;">
                 <div class="loader" style="width:60px;height:60px;border:4px solid var(--bg-lighter);border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite;"></div>
-                <p style="color:var(--text-muted);">Searching all years for "${query}"...</p>
+                <p style="color:var(--text-muted);">Searching all years for "${query}" in ${currentSource === 'isaidub' ? 'Tamil Dubbed' : 'Tamil Movies'}...</p>
             </div>
         `;
         
@@ -690,7 +690,8 @@ async function searchMovies(query) {
     }
     
     if (results.length === 0) {
-        moviesSection.innerHTML = `<p style="text-align:center;color:#b3b3b3;padding:50px;">No movies found for "${query}"</p>`;
+        const sourceHint = currentSource === 'isaidub' ? '<br><small style="color:#ff6b00;">Tip: Try switching to "Tamil Movies" tab for Tamil movies like "Remo"</small>' : '<br><small style="color:#ff6b00;">Tip: Try switching to "Tamil Dubbed" tab for dubbed movies</small>';
+        moviesSection.innerHTML = `<p style="text-align:center;color:#b3b3b3;padding:50px;">No movies found for "${query}"${sourceHint}</p>`;
     } else {
         // Remove duplicates
         const seen = new Set();

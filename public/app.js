@@ -687,10 +687,15 @@ async function searchMovies(query) {
             
             try {
                 const response = await fetch(`${API_BASE}/api/${currentSource}/movies?category=${year}`);
-                const movies = await response.json();
+                if (!response.ok) continue;
+                
+                const text = await response.text();
+                if (!text || text.trim() === '' || !text.startsWith('[')) continue;
+                
+                const movies = JSON.parse(text);
                 if (Array.isArray(movies)) {
                     const filtered = movies.filter(m => 
-                        m.title.toLowerCase().includes(searchTerm)
+                        m.title && m.title.toLowerCase().includes(searchTerm)
                     );
                     results.push(...filtered);
                 }

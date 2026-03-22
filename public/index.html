@@ -288,7 +288,15 @@
                 <div id="downloadLinks" class="download-links"></div>
                 <div id="loadingLinks" class="loading-links" style="display: none;">
                     <div class="loader-small"></div>
-                    <span>Fetching download links...</span>
+                    <div class="download-progress">
+                        <div class="progress-bar-container">
+                            <div class="progress-bar">
+                                <div class="progress-bar-fill" id="progressFill"></div>
+                            </div>
+                            <span class="progress-text" id="progressText">0%</span>
+                        </div>
+                        <div class="progress-status" id="progressStatus">Fetching download links...</div>
+                    </div>
                 </div>
             </div>
         </div>

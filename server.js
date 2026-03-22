@@ -71,6 +71,15 @@ app.use('/app.js', express.static(path.join(process.cwd(), 'public', 'app.js')))
 // ISAIDUB API
 // =====================
 
+function generateISAIDUBThumbnail(title) {
+  const name = title.toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return `${SOURCES.isaidub}/uploads/posters/${name}.jpg`;
+}
+
 app.get('/api/isaidub/movies', async (req, res) => {
   const { category = '2026' } = req.query;
   const targetUrl = `${SOURCES.isaidub}/tamil-${category}-dubbed-movies/`;
@@ -88,7 +97,7 @@ app.get('/api/isaidub/movies', async (req, res) => {
         movies.push({
           title,
           link: href.startsWith("http") ? href : SOURCES.isaidub + href,
-          thumbnail: null,
+          thumbnail: generateISAIDUBThumbnail(title),
           source: 'isaidub'
         });
       }
@@ -120,7 +129,7 @@ app.get('/api/isaidub/search', async (req, res) => {
         results.push({
           title,
           link: href.startsWith("http") ? href : SOURCES.isaidub + href,
-          thumbnail: null,
+          thumbnail: generateISAIDUBThumbnail(title),
           source: 'isaidub'
         });
       }

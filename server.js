@@ -509,9 +509,9 @@ app.get('/api/moviesda/details', async (req, res) => {
     $(".f a").each((_, el) => {
       const href = $(el).attr("href");
       const text = $(el).text().trim();
-      if (href && text.match(/\d{3,4}p/i)) {
+      if (href && href.includes('-movie-')) {
         details.qualities.push({
-          quality: text.match(/(\d{3,4}p)/i)?.[1] || text,
+          quality: text || 'Quality',
           url: href.startsWith("http") ? href : SOURCES.moviesda + href
         });
       }
@@ -538,9 +538,9 @@ app.get('/api/moviesda/qualities', async (req, res) => {
     $(".f a").each((_, el) => {
       const href = $(el).attr("href");
       const text = $(el).text().trim();
-      if (href && text.match(/\d{3,4}p/i)) {
+      if (href && href.includes('-movie-')) {
         qualities.push({
-          quality: text.match(/(\d{3,4}p)/i)?.[1] || text,
+          quality: text || 'Quality',
           url: href.startsWith("http") ? href : SOURCES.moviesda + href
         });
       }

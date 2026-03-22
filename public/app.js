@@ -646,19 +646,45 @@ function closeTrailerModal() {
 async function searchMovies(query) {
     if (!query.trim()) return;
     
-    showLoading(true);
     searchSuggestions.style.display = 'none';
     moviesSection.style.display = 'block';
     myListSection.style.display = 'none';
     
+    const years = ['2026', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017', '2016', '2015'];
+    
+    moviesSection.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:50vh;gap:20px;">
+            <div class="loader" style="width:60px;height:60px;border:4px solid var(--bg-lighter);border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite;"></div>
+            <div style="text-align:center;">
+                <div class="download-progress" style="width:300px;">
+                    <div class="progress-bar-container">
+                        <div class="progress-bar">
+                            <div class="progress-bar-fill" id="searchProgressFill"></div>
+                        </div>
+                        <span class="progress-text" id="searchProgressText">0%</span>
+                    </div>
+                    <div class="progress-status" id="searchProgressStatus">Searching 2026...</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    const searchProgressFill = document.getElementById('searchProgressFill');
+    const searchProgressText = document.getElementById('searchProgressText');
+    const searchProgressStatus = document.getElementById('searchProgressStatus');
+    
     try {
         const searchTerm = query.toLowerCase().trim();
-        
-        // Fetch all movies from all years for search
-        const years = ['2026', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017', '2016', '2015'];
         const results = [];
         
-        for (const year of years) {
+        for (let i = 0; i < years.length; i++) {
+            const year = years[i];
+            const percent = Math.floor(((i + 1) / years.length) * 100);
+            
+            if (searchProgressFill) searchProgressFill.style.width = percent + '%';
+            if (searchProgressText) searchProgressText.textContent = percent + '%';
+            if (searchProgressStatus) searchProgressStatus.textContent = `Searching ${year}... (${i + 1}/${years.length})`;
+            
             try {
                 const response = await fetch(`${API_BASE}/api/${currentSource}/movies?category=${year}`);
                 const movies = await response.json();
@@ -687,8 +713,6 @@ async function searchMovies(query) {
         closeMobileMenu();
     } catch (error) {
         moviesSection.innerHTML = '<p style="text-align:center;color:#e50914;padding:50px;">Search failed. Please try again.</p>';
-    } finally {
-        showLoading(false);
     }
 }
 

@@ -859,10 +859,22 @@ async function fetchISAIDUBDownloadLinks(url, quality) {
     fileInfo.style.display = 'none';
     updateProgress(0, 'Connecting...');
     
+    let progressValue = 0;
+    let progressMsg = 'Connecting...';
+    const progressInterval = setInterval(() => {
+        if (progressValue < 35) {
+            progressValue += Math.random() * 3;
+            updateProgress(Math.min(progressValue, 35), progressMsg);
+        }
+    }, 200);
+    
     try {
-        updateProgress(10, 'Fetching page...');
+        updateProgress(10, 'Fetching links from ISAIDUB...');
+        progressMsg = 'Fetching links from ISAIDUB...';
         const response = await fetch(`${API_BASE}/api/isaidub/download?url=${encodeURIComponent(url)}`);
+        clearInterval(progressInterval);
         updateProgress(40, 'Processing links...');
+        
         const data = await response.json();
         
         if (data.error) {
@@ -924,6 +936,7 @@ async function fetchISAIDUBDownloadLinks(url, quality) {
             downloadLinks.innerHTML = '<p class="error-msg">No download links found</p>';
         }
     } catch (error) {
+        clearInterval(progressInterval);
         downloadLinks.innerHTML = `<p class="error-msg">Error: ${error.message}</p>`;
     } finally {
         loadingLinks.style.display = 'none';
@@ -936,9 +949,20 @@ async function fetchMoviesdaDownloadLinks(url) {
     fileInfo.style.display = 'none';
     updateProgress(0, 'Connecting...');
     
+    let progressValue = 0;
+    let progressMsg = 'Connecting...';
+    const progressInterval = setInterval(() => {
+        if (progressValue < 35) {
+            progressValue += Math.random() * 3;
+            updateProgress(Math.min(progressValue, 35), progressMsg);
+        }
+    }, 200);
+    
     try {
-        updateProgress(10, 'Fetching page...');
+        updateProgress(10, 'Fetching links from Moviesda...');
+        progressMsg = 'Fetching links from Moviesda...';
         const response = await fetch(`${API_BASE}/api/moviesda/download?url=${encodeURIComponent(url)}`);
+        clearInterval(progressInterval);
         updateProgress(40, 'Processing links...');
         const data = await response.json();
         
@@ -978,6 +1002,7 @@ async function fetchMoviesdaDownloadLinks(url) {
             downloadLinks.innerHTML = '<p class="error-msg">No download links found. The movie may be new and links not yet available.</p>';
         }
     } catch (error) {
+        clearInterval(progressInterval);
         downloadLinks.innerHTML = `<p class="error-msg">Error loading downloads: ${error.message}</p>`;
     } finally {
         loadingLinks.style.display = 'none';

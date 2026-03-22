@@ -623,88 +623,6 @@ app.get('/api/moviesda/qualities', async (req, res) => {
   }
 });
 
-async function getMoviesdaDirectLinks(downloadPageUrl) {
-  try {
-    // Follow redirects to get the final download URL
-    const response = await axios.get(downloadPageUrl, {
-      ...axiosConfig,
-      maxRedirects: 5,
-      validateStatus: (status) => status < 500
-    });
-    
-    const finalUrl = response.request?.res?.responseUrl || downloadPageUrl;
-    const $ = cheerio.load(response.data);
-    
-    const result = {
-      download: [],
-      watch: [],
-      info: {}
-    };
-    
-    const info = {
-      fileName: '',
-      fileSize: '',
-      duration: '',
-      resolution: '',
-      format: 'Mp4'
-    };
-    
-    $('.songinfo .details').each((_, el) => {
-      const text = $(el).text().trim();
-      if (text.includes('File Name:')) {
-        info.fileName = text.replace('File Name:', '').trim();
-      }
-      if (text.includes('File Size:')) {
-        info.fileSize = text.replace('File Size:', '').trim();
-      }
-      if (text.includes('Duration:')) {
-        info.duration = text.replace('Duration:', '').trim();
-      }
-      if (text.includes('Video Resolution:')) {
-        info.resolution = text.replace('Video Resolution:', '').trim();
-      }
-      if (text.includes('Download Format:')) {
-        info.format = text.replace('Download Format:', '').trim();
-      }
-    });
-    
-    if (info.fileName) result.info.file_name = info.fileName;
-    if (info.fileSize) result.info.file_size = info.fileSize;
-    if (info.duration) result.info.duration = info.duration;
-    if (info.resolution) result.info.video_resolution = info.resolution;
-    if (info.format) result.info.format = info.format;
-    
-    // Get direct download links from div.dlink a
-    let serverNum = 1;
-    $('div.download div.dlink a').each((_, el) => {
-      const href = $(el).attr('href');
-      if (href) {
-        result.download.push({
-          server: `Server ${serverNum++}`,
-          url: href
-        });
-      }
-    });
-    
-    // If no links found, try to get direct video links
-    if (result.download.length === 0) {
-      $('a[href*=".mp4"], a[href*=".mkv"], a[href*="hotshare"], a[href*="download"]').each((_, el) => {
-        const href = $(el).attr('href');
-        if (href && href.includes('.')) {
-          result.download.push({
-            server: `Server ${serverNum++}`,
-            url: href
-          });
-        }
-      });
-    }
-    
-    return result;
-  } catch {
-    return null;
-  }
-}
-
 app.get('/api/moviesda/download', async (req, res) => {
   const { url } = req.query;
   
@@ -713,54 +631,92 @@ app.get('/api/moviesda/download', async (req, res) => {
   }
   
   try {
-    let downloadPageUrl = null;
-    
+    // Fetch the movie page
     const { data } = await axios.get(url, axiosConfig);
     const $ = cheerio.load(data);
     
-    const hasDirectDownloads = $('div.download div.dlink a').length > 0;
+    const result = {
+      download: [],
+      watch: [],
+      info: {}
+    };
     
-    if (hasDirectDownloads) {
-      downloadPageUrl = url;
-    } else {
-      const qualityLinks = [];
-      $('div.f a').each((_, el) => {
-        const href = $(el).attr('href');
-        const text = $(el).text().trim();
-        if (href && href.includes('-movie/') && !href.includes('/download/')) {
-          qualityLinks.push({
-            quality: text,
-            url: href.startsWith('http') ? href : SOURCES.moviesda + href
+    // Get movie info
+    const title = $('title').text().split('(')[0].replace('Tamil Movie', '').trim();
+    if (title) result.info.title = title;
+    
+    // Find quality links
+    const qualityLinks = [];
+    $('div.f a').each((_, el) => {
+      const href = $(el).attr('href');
+      const text = $(el).text().trim();
+      if (href && href.includes('-movie/') && !href.includes('/download/')) {
+        qualityLinks.push({
+          quality: text,
+          url: href.startsWith('http') ? href : SOURCES.moviesda + href
+        });
+      }
+    });
+    
+    // Try to get direct links from quality pages
+    for (const ql of qualityLinks.slice(0, 3)) {
+      try {
+        const { data: qData, headers } = await axios.get(ql.url, {
+          ...axiosConfig,
+          maxRedirects: 10
+        });
+        
+        // Check if response is a redirect to direct file
+        const finalUrl = headers.location || ql.url;
+        if (finalUrl.includes('.mp4') || finalUrl.includes('.mkv') || finalUrl.includes('hotshare') || finalUrl.includes('download')) {
+          result.download.push({
+            server: ql.quality,
+            url: finalUrl
           });
         }
-      });
-      
-      if (qualityLinks.length === 0) {
-        const dlLink = $('li a.coral').attr('href');
-        if (dlLink) {
-          downloadPageUrl = dlLink.startsWith('http') ? dlLink : SOURCES.moviesda + dlLink;
-        }
-      } else {
-        const preferredLink = qualityLinks.find(l => l.quality.includes('720p')) || qualityLinks[0];
         
-        const { data: qualityPage } = await axios.get(preferredLink.url, axiosConfig);
-        const $q = cheerio.load(qualityPage);
+        const $q = cheerio.load(qData);
         
-        const dlLink = $q('li a.coral').attr('href');
-        if (dlLink) {
-          downloadPageUrl = dlLink.startsWith('http') ? dlLink : SOURCES.moviesda + dlLink;
-        }
+        // Try to find direct download links
+        $q('a[href*="hotshare"], a[href*="download"], a[href*=".mp4"], a[href*=".mkv"]').each((_, el) => {
+          const href = $q(el).attr('href');
+          if (href && !href.includes('moviesda') && href.length > 20) {
+            result.download.push({
+              server: ql.quality,
+              url: href
+            });
+          }
+        });
+        
+        // Also try li.coral links
+        $q('li a.coral, a.coral').each((_, el) => {
+          const href = $q(el).attr('href');
+          if (href) {
+            result.download.push({
+              server: ql.quality,
+              url: href
+            });
+          }
+        });
+        
+      } catch (e) {
+        console.log('Error fetching quality page:', ql.quality);
       }
     }
     
-    if (!downloadPageUrl) {
-      return res.status(404).json({ error: "Could not find download page" });
-    }
+    // Remove duplicates
+    const seen = new Set();
+    result.download = result.download.filter(d => {
+      if (seen.has(d.url)) return false;
+      seen.add(d.url);
+      return true;
+    });
     
-    const result = await getMoviesdaDirectLinks(downloadPageUrl);
-    
-    if (!result) {
-      return res.status(404).json({ error: "Could not extract download links" });
+    if (result.download.length === 0) {
+      return res.json({ 
+        error: "No direct download links found. Please visit the movie page on Moviesda.",
+        movieUrl: url 
+      });
     }
     
     res.json(result);

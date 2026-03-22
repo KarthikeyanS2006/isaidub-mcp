@@ -922,9 +922,9 @@ async function fetchMoviesdaDownloadLinks(url) {
         if (data.download && data.download.length > 0) {
             html += '<h4 style="color:var(--primary);margin:15px 0 10px;">Download Links</h4>';
             data.download.forEach(link => {
-                html += `<a href="${link.url}" target="_blank" class="download-btn">
+                html += `<a href="${link.url}" download="${link.server}.mp4" target="_blank" class="download-btn">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-                    ${link.server}
+                    ${link.server} - Direct Download
                 </a>`;
             });
         }

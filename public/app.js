@@ -254,23 +254,14 @@ function hideSplash() {
     }
 }
 
-// Lazy load images with Intersection Observer
-const imageObserver = new IntersectionObserver((entries, observer) => {
-    entries.forEach(entry => {
-        if (entry.isIntersecting) {
-            const img = entry.target;
-            if (img.dataset.src) {
-                img.src = img.dataset.src;
-                img.removeAttribute('data-src');
-                observer.unobserve(img);
-            }
-        }
-    });
-}, { rootMargin: '100px' });
-
+// Lazy load images - load immediately for better UX
 function observeImages() {
     document.querySelectorAll('.movie-img[data-src]').forEach(img => {
-        imageObserver.observe(img);
+        const src = img.dataset.src;
+        if (src) {
+            img.src = src;
+            img.removeAttribute('data-src');
+        }
     });
 }
 
@@ -696,16 +687,12 @@ function createMovieCard(movie, showRemove = false) {
     const card = document.createElement('div');
     card.className = 'movie-card';
     
-    const placeholderBg = `background: linear-gradient(135deg, var(--bg-light), var(--bg-lighter))`;
     const imgHtml = movie.thumbnail 
-        ? `<img class="movie-img" data-src="${movie.thumbnail}" alt="${escapeHtml(movie.title)}" style="${placeholderBg}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">`
+        ? `<img class="movie-img" src="${movie.thumbnail}" alt="${escapeHtml(movie.title)}" loading="lazy" onerror="this.parentElement.querySelector('.movie-poster').style.display='flex'; this.style.display='none';">`
         : '';
     const emojiHtml = `<div class="movie-poster" style="display:${movie.thumbnail ? 'none' : 'flex'};">🎬</div>`;
     const sourceBadge = movie.source === 'moviesda' ? 'Tamil' : 'Tamil Dubbed';
     const isInList = Storage.isInMyList(movie);
-    
-    // Lazy load image when card is in viewport
-    card.dataset.loaded = 'false';
     
     let actionsHtml = '';
     if (showRemove) {

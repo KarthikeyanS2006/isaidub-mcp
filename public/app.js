@@ -292,8 +292,8 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () 
 
 let displayedMovies = 0;
 let isLoadingMore = false;
-const INITIAL_LOAD = 50;
-const LOAD_MORE_COUNT = 30;
+const INITIAL_LOAD = 150;
+const LOAD_MORE_COUNT = 50;
 
 async function fetchMovies() {
     showLoading(true);

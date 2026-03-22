@@ -244,13 +244,13 @@ window.addEventListener('load', () => {
     checkApiStatus();
 });
 
-// Hide splash screen after loading
+// Hide splash screen
 function hideSplash() {
     if (splashScreen) {
         splashScreen.classList.add('hidden');
         setTimeout(() => {
             splashScreen.style.display = 'none';
-        }, 500);
+        }, 300);
     }
 }
 

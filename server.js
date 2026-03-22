@@ -41,139 +41,6 @@ async function extractLinks($, selector) {
   return links;
 }
 
-async function getISAIDUBDownloadLinks(movieUrl) {
-  const result = { download: [], watch: [], info: {} };
-  
-  try {
-    // Step 1: Get movie page, find original link
-    const moviePage = await axios.get(movieUrl, axiosConfig);
-    const $ = cheerio.load(moviePage.data);
-    
-    const allLinks = [];
-    $("a").each((_, el) => {
-      const href = $(el).attr("href");
-      const text = $(el).text().trim();
-      if (href) allLinks.push({ href, text });
-    });
-    
-    // Find original link
-    const originalLink = allLinks.find(l => l.text.toLowerCase().includes("original"));
-    if (!originalLink) return null;
-    
-    const origUrl = originalLink.href.startsWith("http") 
-      ? originalLink.href 
-      : SOURCES.isaidub + originalLink.href;
-    
-    // Step 2: Get original page, find quality links
-    const origPage = await axios.get(origUrl, axiosConfig);
-    const $orig = cheerio.load(origPage.data);
-    
-    const qualityLinks = [];
-    $orig("a").each((_, el) => {
-      const href = $orig(el).attr("href");
-      const text = $orig(el).text().trim();
-      if (href && href.includes("-movie-") && (text.includes("720p") || text.includes("1080p") || text.includes("360p"))) {
-        qualityLinks.push({ href: href.startsWith("http") ? href : SOURCES.isaidub + href, text });
-      }
-    });
-    
-    if (qualityLinks.length === 0) {
-      // Try any movie link
-      $orig("a").each((_, el) => {
-        const href = $orig(el).attr("href");
-        const text = $orig(el).text().trim();
-        if (href && href.includes("-movie-")) {
-          qualityLinks.push({ href: href.startsWith("http") ? href : SOURCES.isaidub + href, text });
-        }
-      });
-    }
-    
-    // Step 3: Get quality page, find download page link
-    for (const ql of qualityLinks.slice(0, 2)) {
-      try {
-        const qualityPage = await axios.get(ql.href, axiosConfig);
-        const $q = cheerio.load(qualityPage.data);
-        
-        // Find /download/page/ link
-        let downloadPageUrl = null;
-        $q("a").each((_, el) => {
-          const href = $q(el).attr("href");
-          if (href && href.includes("/download/page/")) {
-            downloadPageUrl = href.startsWith("http") ? href : SOURCES.isaidub + href;
-          }
-        });
-        
-        if (!downloadPageUrl) continue;
-        
-        // Step 4: Get download page, find dubpage.xyz link
-        const dlPage = await axios.get(downloadPageUrl, {
-          ...axiosConfig,
-          headers: { ...axiosConfig.headers, "Referer": SOURCES.isaidub + "/" }
-        });
-        const $dl = cheerio.load(dlPage.data);
-        
-        let dubpageUrl = null;
-        $dl("a").each((_, el) => {
-          const href = $dl(el).attr("href");
-          if (href && href.includes("dubpage.xyz")) {
-            dubpageUrl = href;
-          }
-        });
-        
-        if (!dubpageUrl) continue;
-        
-        // Step 5: Get dubpage.xyz, find dubmv.top link
-        const dubpage = await axios.get(dubpageUrl, {
-          ...axiosConfig,
-          headers: { ...axiosConfig.headers, "Referer": downloadPageUrl }
-        });
-        const $db = cheerio.load(dubpage.data);
-        
-        let dubmvUrl = null;
-        $db("a").each((_, el) => {
-          const href = $db(el).attr("href");
-          if (href && href.includes("dubmv.top")) {
-            dubmvUrl = href;
-          }
-        });
-        
-        if (!dubmvUrl) continue;
-        
-        // Step 6: Get dubmv.top, find direct download links
-        const dubmv = await axios.get(dubmvUrl, {
-          ...axiosConfig,
-          headers: { ...axiosConfig.headers, "Referer": dubpageUrl }
-        });
-        const $dm = cheerio.load(dubmv.data);
-        
-        // Get direct download links
-        $dm("a").each((_, el) => {
-          const href = $dm(el).attr("href");
-          if (href && (href.includes("dubshare") || href.includes(".mp4") || href.includes(".mkv"))) {
-            result.download.push({ server: ql.text || "Download", url: href });
-          }
-        });
-        
-        // Get watch online links
-        $dm("a").each((_, el) => {
-          const href = $dm(el).attr("href");
-          if (href && href.includes("onestream")) {
-            result.watch.push({ server: "Onestream", url: href });
-          }
-        });
-        
-      } catch (e) {
-        console.log("Error in ISAIDUB chain:", e.message);
-      }
-    }
-    
-    return result.download.length > 0 || result.watch.length > 0 ? result : null;
-  } catch (e) {
-    console.log("ISAIDUB error:", e.message);
-    return null;
-  }
-}
-
 // ISAIDUB API - Tamil Dubbed Movies
 app.get('/api/isaidub/movies', async (req, res) => {
   const { url } = req.query;
@@ -304,11 +171,32 @@ app.get('/api/isaidub/download', async (req, res) => {
   }
   
   try {
-    const result = await getISAIDUBDownloadLinks(url);
+    // Get movie page and find quality page links
+    const moviePage = await axios.get(url, axiosConfig);
+    const $ = cheerio.load(moviePage.data);
     
-    if (!result || (result.download.length === 0 && result.watch.length === 0)) {
+    const result = {
+      download: [],
+      watch: [],
+      info: {}
+    };
+    
+    // Find quality page links
+    $("a").each((_, el) => {
+      const href = $(el).attr("href");
+      const text = $(el).text().trim();
+      if (href && href.includes("-movie-") && !href.includes("/download/")) {
+        const fullUrl = href.startsWith("http") ? href : SOURCES.isaidub + href;
+        result.download.push({
+          server: text || "Quality Page",
+          url: fullUrl
+        });
+      }
+    });
+    
+    if (result.download.length === 0) {
       return res.json({ 
-        error: "No download links found. Movie may be new or links not available.",
+        error: "No quality pages found. Movie may be removed.",
         download: [],
         watch: [],
         info: {}
@@ -599,9 +487,9 @@ app.get('/api/moviesda/download', async (req, res) => {
   }
   
   try {
-    // Step 1: Fetch the quality page
-    const qualityPage = await axios.get(url, axiosConfig);
-    const $ = cheerio.load(qualityPage.data);
+    // Get the movie/quality page
+    const page = await axios.get(url, axiosConfig);
+    const $ = cheerio.load(page.data);
     
     const result = {
       download: [],
@@ -609,72 +497,40 @@ app.get('/api/moviesda/download', async (req, res) => {
       info: {}
     };
     
-    // Step 2: Find resolution pages (720p, 1080p, etc.)
-    const resolutionPages = [];
-    $('div.f a').each((_, el) => {
+    // Get file info
+    $('div.details').each((_, el) => {
+      const text = $(el).text().trim();
+      if (text.includes('File Name:')) result.info.file_name = text.replace('File Name:', '').trim();
+      if (text.includes('File Size:')) result.info.file_size = text.replace('File Size:', '').trim();
+      if (text.includes('Duration:')) result.info.duration = text.replace('Duration:', '').trim();
+      if (text.includes('Video Resolution:')) result.info.video_resolution = text.replace('Video Resolution:', '').trim();
+    });
+    
+    // Find quality/download page links
+    $("div.f a").each((_, el) => {
       const href = $(el).attr('href');
       const text = $(el).text().trim();
       if (href && href.includes('-movie')) {
-        resolutionPages.push({
-          quality: text,
-          url: href.startsWith('http') ? href : SOURCES.moviesda + href
+        const fullUrl = href.startsWith('http') ? href : SOURCES.moviesda + href;
+        result.download.push({
+          server: text || 'Quality Page',
+          url: fullUrl
         });
       }
     });
     
-    // Step 3: For each resolution page, find .coral download links
-    for (const resPage of resolutionPages.slice(0, 3)) {
-      try {
-        const resPageData = await axios.get(resPage.url, axiosConfig);
-        const $res = cheerio.load(resPageData.data);
-        
-        // Get file info
-        $res('div.details').each((_, el) => {
-          const text = $res(el).text().trim();
-          if (text.includes('File Name:')) result.info.file_name = text.replace('File Name:', '').trim();
-          if (text.includes('File Size:')) result.info.file_size = text.replace('File Size:', '').trim();
-          if (text.includes('Duration:')) result.info.duration = text.replace('Duration:', '').trim();
-          if (text.includes('Video Resolution:')) result.info.video_resolution = text.replace('Video Resolution:', '').trim();
+    // Also find .coral download links
+    $("a.coral").each((_, el) => {
+      const href = $(el).attr('href');
+      const text = $(el).text().trim();
+      if (href) {
+        const fullUrl = href.startsWith('http') ? href : SOURCES.moviesda + href;
+        result.download.push({
+          server: text || 'Download Page',
+          url: fullUrl
         });
-        
-        // Find .coral links (download page links)
-        $res('a.coral').each((_, el) => {
-          const href = $res(el).attr('href');
-          const text = $res(el).text().trim();
-          if (href) {
-            const dlPageUrl = href.startsWith('http') ? href : SOURCES.moviesda + href;
-            
-            // Fetch the download page to get direct links
-            try {
-              const dlPage = axios.get(dlPageUrl, axiosConfig).then(dlRes => {
-                const $dl = cheerio.load(dlRes.data);
-                $dl('div.dlink a').each((_, link) => {
-                  const dlHref = $dl(link).attr('href');
-                  const dlText = $dl(link).text().trim();
-                  if (dlHref) {
-                    result.download.push({
-                      server: dlText || resPage.quality,
-                      url: dlHref
-                    });
-                  }
-                });
-              }).catch(() => {});
-            } catch {}
-          }
-        });
-        
-        // Also find direct hotshare links
-        $res('a[href*="hotshare"]').each((_, el) => {
-          const href = $res(el).attr('href');
-          if (href) {
-            result.download.push({ server: "HotShare", url: href });
-          }
-        });
-        
-      } catch (e) {
-        console.log('Error on resolution page:', resPage.url);
       }
-    }
+    });
     
     // Remove duplicates
     const seen = new Set();

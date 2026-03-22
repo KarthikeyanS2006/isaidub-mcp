@@ -583,7 +583,7 @@ app.get('/api/moviesda/download', async (req, res) => {
   }
   
   try {
-    // Fetch the quality page
+    // Step 1: Fetch the quality page
     const qualityPage = await axios.get(url, axiosConfig);
     const $ = cheerio.load(qualityPage.data);
     
@@ -593,71 +593,80 @@ app.get('/api/moviesda/download', async (req, res) => {
       info: {}
     };
     
-    // Get file info from quality page
-    $('div.details').each((_, el) => {
+    // Step 2: Find resolution pages (720p, 1080p, etc.)
+    const resolutionPages = [];
+    $('div.f a').each((_, el) => {
+      const href = $(el).attr('href');
       const text = $(el).text().trim();
-      if (text.includes('File Name:')) {
-        result.info.file_name = text.replace('File Name:', '').trim();
-      }
-      if (text.includes('File Size:')) {
-        result.info.file_size = text.replace('File Size:', '').trim();
-      }
-      if (text.includes('Duration:')) {
-        result.info.duration = text.replace('Duration:', '').trim();
-      }
-      if (text.includes('Video Resolution:')) {
-        result.info.video_resolution = text.replace('Video Resolution:', '').trim();
+      if (href && href.includes('-movie')) {
+        resolutionPages.push({
+          quality: text,
+          url: href.startsWith('http') ? href : SOURCES.moviesda + href
+        });
       }
     });
     
-    // Find download links (.coral links point to download page)
-    const downloadPageLinks = [];
-    $('a.coral').each((_, el) => {
-      const href = $(el).attr('href');
-      if (href) {
-        downloadPageLinks.push(href.startsWith('http') ? href : SOURCES.moviesda + href);
-      }
-    });
-    
-    // Also check for direct download links
-    $('a[href*="hotshare"]').each((_, el) => {
-      const href = $(el).attr('href');
-      if (href) {
-        result.download.push({ server: "HotShare", url: href });
-      }
-    });
-    
-    // If we have download page links, fetch them to get direct links
-    for (const dlUrl of downloadPageLinks.slice(0, 2)) {
+    // Step 3: For each resolution page, find .coral download links
+    for (const resPage of resolutionPages.slice(0, 3)) {
       try {
-        const dlPage = await axios.get(dlUrl, axiosConfig);
-        const $dl = cheerio.load(dlPage.data);
+        const resPageData = await axios.get(resPage.url, axiosConfig);
+        const $res = cheerio.load(resPageData.data);
         
-        // Get final download links from div.dlink
-        $dl('div.dlink a').each((_, el) => {
-          const href = $dl(el).attr('href');
-          const text = $dl(el).text().trim();
+        // Get file info
+        $res('div.details').each((_, el) => {
+          const text = $res(el).text().trim();
+          if (text.includes('File Name:')) result.info.file_name = text.replace('File Name:', '').trim();
+          if (text.includes('File Size:')) result.info.file_size = text.replace('File Size:', '').trim();
+          if (text.includes('Duration:')) result.info.duration = text.replace('Duration:', '').trim();
+          if (text.includes('Video Resolution:')) result.info.video_resolution = text.replace('Video Resolution:', '').trim();
+        });
+        
+        // Find .coral links (download page links)
+        $res('a.coral').each((_, el) => {
+          const href = $res(el).attr('href');
+          const text = $res(el).text().trim();
           if (href) {
-            result.download.push({
-              server: text || 'Download',
-              url: href
-            });
+            const dlPageUrl = href.startsWith('http') ? href : SOURCES.moviesda + href;
+            
+            // Fetch the download page to get direct links
+            try {
+              const dlPage = axios.get(dlPageUrl, axiosConfig).then(dlRes => {
+                const $dl = cheerio.load(dlRes.data);
+                $dl('div.dlink a').each((_, link) => {
+                  const dlHref = $dl(link).attr('href');
+                  const dlText = $dl(link).text().trim();
+                  if (dlHref) {
+                    result.download.push({
+                      server: dlText || resPage.quality,
+                      url: dlHref
+                    });
+                  }
+                });
+              }).catch(() => {});
+            } catch {}
           }
         });
+        
+        // Also find direct hotshare links
+        $res('a[href*="hotshare"]').each((_, el) => {
+          const href = $res(el).attr('href');
+          if (href) {
+            result.download.push({ server: "HotShare", url: href });
+          }
+        });
+        
       } catch (e) {
-        console.log('Error fetching download page');
+        console.log('Error on resolution page:', resPage.url);
       }
     }
     
-    // If still no downloads, try to find any direct links
-    if (result.download.length === 0) {
-      $('a[href*="download"], a[href*=".mp4"], a[href*=".mkv"]').each((_, el) => {
-        const href = $(el).attr('href');
-        if (href) {
-          result.download.push({ server: "Direct", url: href });
-        }
-      });
-    }
+    // Remove duplicates
+    const seen = new Set();
+    result.download = result.download.filter(d => {
+      if (!d.url || seen.has(d.url)) return false;
+      seen.add(d.url);
+      return true;
+    });
     
     res.json(result);
   } catch (error) {

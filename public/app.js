@@ -237,16 +237,42 @@ window.addEventListener('load', () => {
     if (sourceTab) sourceTab.classList.add('active');
     if (catTab) catTab.classList.add('active');
     
-    setTimeout(() => {
-        splashScreen.classList.add('hidden');
-    }, 4000);
-    
-    // Initialize theme
+    // Hide splash screen when movies start loading
     const savedTheme = Storage.getTheme();
     applyTheme(savedTheme);
     
     checkApiStatus();
 });
+
+// Hide splash screen after loading
+function hideSplash() {
+    if (splashScreen) {
+        splashScreen.classList.add('hidden');
+        setTimeout(() => {
+            splashScreen.style.display = 'none';
+        }, 500);
+    }
+}
+
+// Lazy load images with Intersection Observer
+const imageObserver = new IntersectionObserver((entries, observer) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            const img = entry.target;
+            if (img.dataset.src) {
+                img.src = img.dataset.src;
+                img.removeAttribute('data-src');
+                observer.unobserve(img);
+            }
+        }
+    });
+}, { rootMargin: '100px' });
+
+function observeImages() {
+    document.querySelectorAll('.movie-img[data-src]').forEach(img => {
+        imageObserver.observe(img);
+    });
+}
 
 // Theme toggle
 let themeMode = 'dark'; // dark, light, system
@@ -273,8 +299,15 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () 
     }
 });
 
+let displayedMovies = 0;
+let isLoadingMore = false;
+const INITIAL_LOAD = 50;
+const LOAD_MORE_COUNT = 30;
+
 async function fetchMovies() {
     showLoading(true);
+    displayedMovies = 0;
+    hideSplash();
     
     try {
         const source = 'moviesda';
@@ -284,7 +317,7 @@ async function fetchMovies() {
         const movies = Array.isArray(data) ? data : [];
         
         if (movies.length === 0) {
-            moviesSection.innerHTML = '<p style="text-align:center;color:#b3b3b3;padding:50px;">No movies found</p>';
+            moviesSection.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:50px;">No movies found</p>';
         } else {
             allMovies = movies;
             heroMovies = movies.slice(0, 5);
@@ -292,16 +325,54 @@ async function fetchMovies() {
             updateHeroSection(heroMovies[0]);
             startHeroSlideshow();
             
-            createMovieRows(movies);
+            createMovieRows(movies.slice(0, INITIAL_LOAD));
+            displayedMovies = INITIAL_LOAD;
+            
+            // Observe images for lazy loading
+            setTimeout(observeImages, 100);
         }
         
         renderMyList();
     } catch (error) {
-        moviesSection.innerHTML = `<p style="text-align:center;color:#e50914;padding:50px;">Error: ${error.message}</p>`;
+        moviesSection.innerHTML = `<p style="text-align:center;color:var(--primary);padding:50px;">Error: ${error.message}</p>`;
     } finally {
         showLoading(false);
     }
 }
+
+function loadMoreMovies() {
+    if (isLoadingMore || displayedMovies >= allMovies.length) return;
+    
+    isLoadingMore = true;
+    const nextMovies = allMovies.slice(displayedMovies, displayedMovies + LOAD_MORE_COUNT);
+    
+    const existingRow = document.querySelector('#grid-all');
+    if (existingRow) {
+        nextMovies.forEach(movie => {
+            const card = createMovieCard(movie);
+            existingRow.appendChild(card);
+        });
+        addScrollListenersToGrid(existingRow);
+    }
+    
+    displayedMovies += nextMovies.length;
+    isLoadingMore = false;
+}
+
+function addScrollListenersToGrid(grid) {
+    grid.addEventListener('scroll', () => {
+        if (grid.scrollLeft + grid.clientWidth >= grid.scrollWidth - 200) {
+            loadMoreMovies();
+        }
+    });
+}
+
+// Infinite scroll on window
+window.addEventListener('scroll', () => {
+    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 1000) {
+        loadMoreMovies();
+    }
+});
 
 function createMovieRows(movies) {
     moviesSection.innerHTML = '';
@@ -319,19 +390,17 @@ function createMovieRows(movies) {
         );
     }
     
+    // Update allMovies with filtered movies
+    allMovies = filteredMovies;
+    
     const allRow = createRow('Latest', filteredMovies, 'all');
     moviesSection.appendChild(allRow);
     
-    const isaidubMovies = filteredMovies.filter(m => m.source === 'isaidub');
-    const moviesdaMovies = filteredMovies.filter(m => m.source === 'moviesda');
-    
-    if (isaidubMovies.length >= 5) {
-        moviesSection.appendChild(createRow('Tamil Dubbed', isaidubMovies, 'isaidub'));
-    }
-    
-    if (moviesdaMovies.length >= 5) {
-        moviesSection.appendChild(createRow('Tamil Movies', moviesdaMovies, 'moviesda'));
-    }
+    // Add scroll listener to the grid
+    setTimeout(() => {
+        const grid = document.getElementById('grid-all');
+        if (grid) addScrollListenersToGrid(grid);
+    }, 100);
     
     const shuffled = [...filteredMovies].sort(() => Math.random() - 0.5);
     const actionMovies = shuffled.filter(m => 
@@ -626,12 +695,17 @@ async function searchMovies(query) {
 function createMovieCard(movie, showRemove = false) {
     const card = document.createElement('div');
     card.className = 'movie-card';
+    
+    const placeholderBg = `background: linear-gradient(135deg, var(--bg-light), var(--bg-lighter))`;
     const imgHtml = movie.thumbnail 
-        ? `<img src="${movie.thumbnail}" alt="${escapeHtml(movie.title)}" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">`
+        ? `<img class="movie-img" data-src="${movie.thumbnail}" alt="${escapeHtml(movie.title)}" style="${placeholderBg}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">`
         : '';
     const emojiHtml = `<div class="movie-poster" style="display:${movie.thumbnail ? 'none' : 'flex'};">🎬</div>`;
     const sourceBadge = movie.source === 'moviesda' ? 'Tamil' : 'Tamil Dubbed';
     const isInList = Storage.isInMyList(movie);
+    
+    // Lazy load image when card is in viewport
+    card.dataset.loaded = 'false';
     
     let actionsHtml = '';
     if (showRemove) {
@@ -758,7 +832,9 @@ function renderISAIDUBQualities(movieUrl) {
 
 function renderMoviesdaQualities(qualities) {
     if (!qualities || qualities.length === 0) {
-        qualityOptions.innerHTML = '<p style="color:#b3b3b3;">No qualities available</p>';
+        qualityOptions.innerHTML = '<p style="color:var(--text-muted);">No qualities found</p>';
+        downloadLinks.innerHTML = '<p class="error-msg">This movie may not have download links available yet</p>';
+        loadingLinks.style.display = 'none';
         return;
     }
     
@@ -774,7 +850,10 @@ function renderMoviesdaQualities(qualities) {
         });
     });
     
-    fetchMoviesdaDownloadLinks(qualities[0].url);
+    // Auto-load first quality
+    if (qualities[0] && qualities[0].url) {
+        fetchMoviesdaDownloadLinks(qualities[0].url);
+    }
 }
 
 async function fetchISAIDUBDownloadLinks(url, quality) {
@@ -820,7 +899,7 @@ async function fetchISAIDUBDownloadLinks(url, quality) {
 
 async function fetchMoviesdaDownloadLinks(url) {
     loadingLinks.style.display = 'flex';
-    downloadLinks.innerHTML = '';
+    downloadLinks.innerHTML = '<p style="color:var(--text-muted);">Loading download links...</p>';
     fileInfo.style.display = 'none';
     
     try {
@@ -828,39 +907,45 @@ async function fetchMoviesdaDownloadLinks(url) {
         const data = await response.json();
         
         if (data.info && Object.keys(data.info).length > 0) {
-            let infoHtml = '';
-            if (data.info.file_name) infoHtml += `<p><strong>File:</strong> ${data.info.file_name}</p>`;
-            if (data.info.file_size) infoHtml += `<p><strong>Size:</strong> ${data.info.file_size}</p>`;
-            if (data.info.duration) infoHtml += `<p><strong>Duration:</strong> ${data.info.duration}</p>`;
-            if (data.info.video_resolution) infoHtml += `<p><strong>Resolution:</strong> ${data.info.video_resolution}</p>`;
-            if (data.info.format) infoHtml += `<p><strong>Format:</strong> ${data.info.format}</p>`;
-            if (infoHtml) {
-                fileInfo.innerHTML = infoHtml;
-                fileInfo.style.display = 'block';
-            }
+            let infoHtml = '<div class="file-info-grid">';
+            if (data.info.file_name) infoHtml += `<div><strong>File:</strong> ${data.info.file_name}</div>`;
+            if (data.info.file_size) infoHtml += `<div><strong>Size:</strong> ${data.info.file_size}</div>`;
+            if (data.info.duration) infoHtml += `<div><strong>Duration:</strong> ${data.info.duration}</div>`;
+            if (data.info.video_resolution) infoHtml += `<div><strong>Quality:</strong> ${data.info.video_resolution}</div>`;
+            infoHtml += '</div>';
+            fileInfo.innerHTML = infoHtml;
+            fileInfo.style.display = 'block';
         }
         
         let html = '';
         
         if (data.download && data.download.length > 0) {
+            html += '<h4 style="color:var(--primary);margin:15px 0 10px;">Download Links</h4>';
             data.download.forEach(link => {
-                html += `<a href="${link.url}" target="_blank" class="download-btn">${link.server} - Download</a>`;
+                html += `<a href="${link.url}" target="_blank" class="download-btn">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                    ${link.server}
+                </a>`;
             });
         }
         
         if (data.watch && data.watch.length > 0) {
+            html += '<h4 style="color:var(--primary);margin:15px 0 10px;">Watch Online</h4>';
             data.watch.forEach(link => {
-                html += `<a href="${link.url}" target="_blank" class="watch-btn">${link.server} - Watch Online</a>`;
+                html += `<a href="${link.url}" target="_blank" class="watch-btn">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                    ${link.server}
+                </a>`;
             });
         }
         
         if (html) {
             downloadLinks.innerHTML = html;
         } else {
-            downloadLinks.innerHTML = '<p class="error-msg">No download links found</p>';
+            downloadLinks.innerHTML = '<p class="error-msg">No download links found. The movie may be new and links not yet available.</p>';
         }
     } catch (error) {
-        downloadLinks.innerHTML = `<p class="error-msg">Error: ${error.message}</p>`;
+        downloadLinks.innerHTML = `<p class="error-msg">Error loading downloads: ${error.message}</p>`;
     } finally {
         loadingLinks.style.display = 'none';
     }
@@ -868,6 +953,7 @@ async function fetchMoviesdaDownloadLinks(url) {
 
 function openModal(movie) {
     currentMovieUrl = movie.link;
+    currentSource = 'moviesda'; // Always use Moviesda
     modalTitle.textContent = movie.title;
     
     if (movie.thumbnail) {
@@ -882,7 +968,7 @@ function openModal(movie) {
     modalDirector.innerHTML = '';
     modalStarring.innerHTML = '';
     modalSynopsis.textContent = '';
-    qualityOptions.innerHTML = '<p style="color:#b3b3b3;">Loading...</p>';
+    qualityOptions.innerHTML = '<p style="color:var(--text-muted);">Loading qualities...</p>';
     fileInfo.style.display = 'none';
     downloadLinks.innerHTML = '';
     loadingLinks.style.display = 'flex';

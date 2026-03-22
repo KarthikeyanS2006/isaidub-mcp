@@ -755,7 +755,7 @@ main {
     right: 0;
     height: 60vh;
     min-height: 350px;
-    background: linear-gradient(to top, var(--dark) 0%, transparent 50%);
+    background: linear-gradient(to top, var(--bg) 0%, transparent 50%);
 }
 
 .modal-body {

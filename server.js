@@ -624,8 +624,15 @@ app.get('/api/moviesda/qualities', async (req, res) => {
 
 async function getMoviesdaDirectLinks(downloadPageUrl) {
   try {
-    const { data } = await axios.get(downloadPageUrl, axiosConfig);
-    const $ = cheerio.load(data);
+    // Follow redirects to get the final download URL
+    const response = await axios.get(downloadPageUrl, {
+      ...axiosConfig,
+      maxRedirects: 5,
+      validateStatus: (status) => status < 500
+    });
+    
+    const finalUrl = response.request?.res?.responseUrl || downloadPageUrl;
+    const $ = cheerio.load(response.data);
     
     const result = {
       download: [],
@@ -666,6 +673,7 @@ async function getMoviesdaDirectLinks(downloadPageUrl) {
     if (info.resolution) result.info.video_resolution = info.resolution;
     if (info.format) result.info.format = info.format;
     
+    // Get direct download links from div.dlink a
     let serverNum = 1;
     $('div.download div.dlink a').each((_, el) => {
       const href = $(el).attr('href');
@@ -676,6 +684,19 @@ async function getMoviesdaDirectLinks(downloadPageUrl) {
         });
       }
     });
+    
+    // If no links found, try to get direct video links
+    if (result.download.length === 0) {
+      $('a[href*=".mp4"], a[href*=".mkv"], a[href*="hotshare"], a[href*="download"]').each((_, el) => {
+        const href = $(el).attr('href');
+        if (href && href.includes('.')) {
+          result.download.push({
+            server: `Server ${serverNum++}`,
+            url: href
+          });
+        }
+      });
+    }
     
     return result;
   } catch {

@@ -583,8 +583,9 @@ app.get('/api/moviesda/download', async (req, res) => {
   }
   
   try {
-    const { data } = await axios.get(url, axiosConfig);
-    const $ = cheerio.load(data);
+    // Fetch the quality page
+    const qualityPage = await axios.get(url, axiosConfig);
+    const $ = cheerio.load(qualityPage.data);
     
     const result = {
       download: [],
@@ -592,46 +593,70 @@ app.get('/api/moviesda/download', async (req, res) => {
       info: {}
     };
     
-    $('div.dlink a').each((_, el) => {
-      const href = $(el).attr("href");
-      if (href) {
-        result.download.push({
-          server: "Direct Download",
-          url: href
-        });
-      }
-    });
-    
+    // Get file info from quality page
     $('div.details').each((_, el) => {
       const text = $(el).text().trim();
-      const parts = text.split(':');
-      if (parts.length >= 2) {
-        const key = parts[0].toLowerCase().replace(/ /g, '_');
-        result.info[key] = parts.slice(1).join(':').trim();
+      if (text.includes('File Name:')) {
+        result.info.file_name = text.replace('File Name:', '').trim();
+      }
+      if (text.includes('File Size:')) {
+        result.info.file_size = text.replace('File Size:', '').trim();
+      }
+      if (text.includes('Duration:')) {
+        result.info.duration = text.replace('Duration:', '').trim();
+      }
+      if (text.includes('Video Resolution:')) {
+        result.info.video_resolution = text.replace('Video Resolution:', '').trim();
       }
     });
     
-    const fileName = $('strong:contains("File Name")').parent().text().replace('File Name:', '').trim() ||
-                      $('div.details strong').first().text().trim() || '';
-    const fileSize = $('strong:contains("File Size")').parent().text().replace('File Size:', '').trim() || '';
-    const duration = $('strong:contains("Duration")').parent().text().replace('Duration:', '').trim() || '';
-    const resolution = $('strong:contains("Video Resolution")').parent().text().replace('Video Resolution:', '').trim() || '';
-    const format = $('strong:contains("Download Format")').parent().text().replace('Download Format:', '').trim() || 'Mp4';
+    // Find download links (.coral links point to download page)
+    const downloadPageLinks = [];
+    $('a.coral').each((_, el) => {
+      const href = $(el).attr('href');
+      if (href) {
+        downloadPageLinks.push(href.startsWith('http') ? href : SOURCES.moviesda + href);
+      }
+    });
     
-    if (fileName) result.info.file_name = fileName;
-    if (fileSize) result.info.file_size = fileSize;
-    if (duration) result.info.duration = duration;
-    if (resolution) result.info.video_resolution = resolution;
-    if (format) result.info.format = format;
+    // Also check for direct download links
+    $('a[href*="hotshare"]').each((_, el) => {
+      const href = $(el).attr('href');
+      if (href) {
+        result.download.push({ server: "HotShare", url: href });
+      }
+    });
     
-    const dlLink = $('a[href*="hotshare"]').attr('href');
-    if (dlLink) {
-      result.download = [{ server: "HotShare", url: dlLink }];
+    // If we have download page links, fetch them to get direct links
+    for (const dlUrl of downloadPageLinks.slice(0, 2)) {
+      try {
+        const dlPage = await axios.get(dlUrl, axiosConfig);
+        const $dl = cheerio.load(dlPage.data);
+        
+        // Get final download links from div.dlink
+        $dl('div.dlink a').each((_, el) => {
+          const href = $dl(el).attr('href');
+          const text = $dl(el).text().trim();
+          if (href) {
+            result.download.push({
+              server: text || 'Download',
+              url: href
+            });
+          }
+        });
+      } catch (e) {
+        console.log('Error fetching download page');
+      }
     }
     
-    const watchLink = $('a[href*="onestream"]').attr('href');
-    if (watchLink) {
-      result.watch = [{ server: "Onestream", url: watchLink }];
+    // If still no downloads, try to find any direct links
+    if (result.download.length === 0) {
+      $('a[href*="download"], a[href*=".mp4"], a[href*=".mkv"]').each((_, el) => {
+        const href = $(el).attr('href');
+        if (href) {
+          result.download.push({ server: "Direct", url: href });
+        }
+      });
     }
     
     res.json(result);

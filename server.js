@@ -199,10 +199,45 @@ app.get('/api/isaidub/download', async (req, res) => {
     const { data } = await axios.get(url, axiosConfig);
     const $ = cheerio.load(data);
     
-    const result = { download: [], watch: [], info: {} };
+    const result = { download: [], watch: [], info: {}, episodes: [] };
     const seenPages = new Set();
     const seenDownloads = new Set();
     const qualityQueue = [];
+    
+    const hasEpisodes = $(".mv-content").length > 0;
+    
+    if (hasEpisodes) {
+      $(".mv-content").each((_, el) => {
+        const linkEl = $(el).find("a.coral");
+        const href = linkEl.attr("href");
+        const title = linkEl.find("strong").text().trim() || $(el).find("a").text().trim();
+        const imgEl = $(el).find("img");
+        const thumbnail = imgEl.attr("src") ? SOURCES.isaidub + imgEl.attr("src") : null;
+        const sizeEl = $(el).find("li").filter((i, l) => $(l).text().includes("File Size"));
+        const fileSize = sizeEl.length > 0 ? sizeEl.text().replace("File Size:", "").trim() : null;
+        
+        if (href) {
+          const dlUrl = href.startsWith("http") ? href : SOURCES.isaidub + href;
+          if (!seenDownloads.has(dlUrl)) {
+            seenDownloads.add(dlUrl);
+            result.episodes.push({
+              server: title || 'Episode',
+              url: dlUrl,
+              thumbnail: thumbnail,
+              fileSize: fileSize,
+              mp4Url: null
+            });
+          }
+        }
+      });
+      
+      for (const ep of result.episodes) {
+        const mp4Url = await getMp4Url(ep.url);
+        if (mp4Url) ep.mp4Url = mp4Url;
+      }
+      
+      return res.json(result);
+    }
     
     $("a").each((_, el) => {
       const href = $(el).attr("href");

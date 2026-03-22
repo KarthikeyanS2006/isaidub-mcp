@@ -860,7 +860,25 @@ async function fetchISAIDUBDownloadLinks(url, quality) {
         
         let html = '';
         
+        if (data.episodes && data.episodes.length > 0) {
+            html += '<h4 style="color:var(--primary);margin:15px 0 10px;">Episodes</h4>';
+            data.episodes.forEach(ep => {
+                const downloadUrl = ep.mp4Url || ep.url;
+                const thumbHtml = ep.thumbnail ? `<img src="${ep.thumbnail}" alt="" style="width:80px;height:45px;object-fit:cover;border-radius:4px;margin-right:10px;">` : '';
+                const sizeHtml = ep.fileSize ? `<span style="font-size:12px;color:#888;">${ep.fileSize}</span>` : '';
+                html += `<a href="${downloadUrl}" download="${ep.server}.mp4" target="_blank" class="download-btn" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
+                    ${thumbHtml}
+                    <div style="flex:1;">
+                        <div>${ep.server}</div>
+                        ${sizeHtml}
+                    </div>
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                </a>`;
+            });
+        }
+        
         if (data.download && data.download.length > 0) {
+            html += '<h4 style="color:var(--primary);margin:15px 0 10px;">Download Links</h4>';
             data.download.forEach(link => {
                 const downloadUrl = link.mp4Url || link.url;
                 html += `<a href="${downloadUrl}" download="${link.server}.mp4" target="_blank" class="download-btn">

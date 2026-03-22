@@ -662,6 +662,7 @@ app.get('/api/moviesda/download', async (req, res) => {
     });
     
     // Step 2: Go to quality page and find download links
+    const allDownloadLinks = [];
     for (const ql of qualityLinks.slice(0, 3)) {
       try {
         const qualityPage = await axios.get(ql.url, axiosConfig);
@@ -671,8 +672,8 @@ app.get('/api/moviesda/download', async (req, res) => {
         $q('a.coral').each((_, el) => {
           const href = $q(el).attr('href');
           if (href) {
-            qualityLinks.push({
-              quality: ql.quality + ' - Download',
+            allDownloadLinks.push({
+              quality: ql.quality,
               url: href.startsWith('http') ? href : SOURCES.moviesda + href
             });
           }
@@ -683,15 +684,22 @@ app.get('/api/moviesda/download', async (req, res) => {
       }
     }
     
-    // Step 3: Go to download pages and extract direct links
-    for (const dl of qualityLinks.slice(0, 5)) {
-      if (!dl.url.includes('/download/')) continue;
-      
+    // Step 3: Go to download pages, follow redirects to get direct links
+    for (const dl of allDownloadLinks.slice(0, 5)) {
       try {
-        const dlPage = await axios.get(dl.url, axiosConfig);
+        // Follow redirects to get the final URL
+        const dlPage = await axios.get(dl.url, {
+          ...axiosConfig,
+          maxRedirects: 10,
+          validateStatus: (status) => status < 500
+        });
+        
+        // Get the final URL after redirects
+        const finalUrl = dlPage.request?.res?.responseUrl || dl.url;
+        
+        // Get file info from the download page
         const $d = cheerio.load(dlPage.data);
         
-        // Get file info
         $d('.details').each((_, el) => {
           const text = $d(el).text().trim();
           if (text.includes('File Name:')) {
@@ -708,7 +716,15 @@ app.get('/api/moviesda/download', async (req, res) => {
           }
         });
         
-        // Get download links from .dlink
+        // Add the final redirect URL as download link
+        if (finalUrl && finalUrl !== dl.url) {
+          result.download.push({
+            server: dl.quality + ' - Direct',
+            url: finalUrl
+          });
+        }
+        
+        // Also get links from the page
         $d('div.dlink a').each((_, el) => {
           const href = $d(el).attr('href');
           const text = $d(el).text().trim();
@@ -725,7 +741,7 @@ app.get('/api/moviesda/download', async (req, res) => {
       }
     }
     
-    // Remove duplicates
+    // Remove duplicates and empty URLs
     const seen = new Set();
     result.download = result.download.filter(d => {
       if (!d.url || d.url.length < 10) return false;

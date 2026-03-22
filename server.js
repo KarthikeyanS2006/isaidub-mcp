@@ -631,6 +631,7 @@ app.get('/api/moviesda/download', async (req, res) => {
   }
   
   try {
+    // Step 1: Get the movie page and find quality links
     const moviePage = await axios.get(url, axiosConfig);
     const $ = cheerio.load(moviePage.data);
     
@@ -640,65 +641,87 @@ app.get('/api/moviesda/download', async (req, res) => {
       info: {}
     };
     
+    // Get movie info
     const title = $('title').text().split('(')[0].replace('Tamil Movie', '').trim();
     if (title) result.info.title = title;
     
-    // Find quality links
+    // Find quality page links (e.g., /remo-movie-360p-hd/)
     const qualityLinks = [];
     $('a').each((_, el) => {
       const href = $(el).attr('href');
       const text = $(el).text().trim();
       
-      if (href && href.includes('-movie/') && !href.includes('/download/')) {
-        const isQuality = text.match(/\d{3,4}p/i) || 
-                          text.toLowerCase().includes('hq') || 
-                          text.toLowerCase().includes('predvd') ||
-                          text.toLowerCase().includes('original') ||
-                          text.toLowerCase().includes('hd');
-        
-        if (isQuality) {
+      if (href && href.includes('-movie-') && !href.includes('/download/')) {
+        if (href.match(/\/[\w-]+-movie-\w+/)) {
           qualityLinks.push({
-            quality: text,
+            quality: text || 'Quality',
             url: href.startsWith('http') ? href : SOURCES.moviesda + href
           });
         }
       }
     });
     
-    // Remove duplicates
-    const seenUrls = new Set();
-    const uniqueLinks = qualityLinks.filter(l => {
-      if (seenUrls.has(l.url)) return false;
-      seenUrls.add(l.url);
-      return true;
-    });
-    
-    // Process first 3 links
-    for (let i = 0; i < Math.min(uniqueLinks.length, 3); i++) {
-      const ql = uniqueLinks[i];
+    // Step 2: Go to quality page and find download links
+    for (const ql of qualityLinks.slice(0, 3)) {
       try {
-        const qualityPage = await axios.get(ql.url, {
-          ...axiosConfig,
-          maxRedirects: 5,
-          validateStatus: (status) => status < 500
-        });
-        
+        const qualityPage = await axios.get(ql.url, axiosConfig);
         const $q = cheerio.load(qualityPage.data);
         
-        $q('a').each((_, el) => {
+        // Find download links with .coral class
+        $q('a.coral').each((_, el) => {
           const href = $q(el).attr('href');
           if (href) {
-            if (href.includes('.mp4') || href.includes('.mkv') || href.includes('hotshare')) {
-              result.download.push({
-                server: ql.quality,
-                url: href.startsWith('http') ? href : SOURCES.moviesda + href
-              });
-            }
+            qualityLinks.push({
+              quality: ql.quality + ' - Download',
+              url: href.startsWith('http') ? href : SOURCES.moviesda + href
+            });
           }
         });
         
       } catch (e) {
-        console.log('Error:', ql.quality);
+        console.log('Quality page error:', ql.quality);
+      }
+    }
+    
+    // Step 3: Go to download pages and extract direct links
+    for (const dl of qualityLinks.slice(0, 5)) {
+      if (!dl.url.includes('/download/')) continue;
+      
+      try {
+        const dlPage = await axios.get(dl.url, axiosConfig);
+        const $d = cheerio.load(dlPage.data);
+        
+        // Get file info
+        $d('.details').each((_, el) => {
+          const text = $d(el).text().trim();
+          if (text.includes('File Name:')) {
+            result.info.file_name = text.replace('File Name:', '').trim();
+          }
+          if (text.includes('File Size:')) {
+            result.info.file_size = text.replace('File Size:', '').trim();
+          }
+          if (text.includes('Video Resolution:')) {
+            result.info.video_resolution = text.replace('Video Resolution:', '').trim();
+          }
+          if (text.includes('Duration:')) {
+            result.info.duration = text.replace('Duration:', '').trim();
+          }
+        });
+        
+        // Get download links from .dlink
+        $d('div.dlink a').each((_, el) => {
+          const href = $d(el).attr('href');
+          const text = $d(el).text().trim();
+          if (href) {
+            result.download.push({
+              server: dl.quality + ' - ' + (text || 'Server'),
+              url: href
+            });
+          }
+        });
+        
+      } catch (e) {
+        console.log('Download page error');
       }
     }
     

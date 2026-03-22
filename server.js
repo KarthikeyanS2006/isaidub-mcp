@@ -382,13 +382,14 @@ app.get('/api/isaidub/details', async (req, res) => {
 // MOVIESDA API - Tamil Movies
 app.get('/api/moviesda/movies', async (req, res) => {
   const { category = '2026' } = req.query;
-  const years = ['2026', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017', '2016', '2015'];
+  // Only fetch current year + last 2 years for faster loading
+  const years = [category, String(parseInt(category) - 1), String(parseInt(category) - 2)];
   const movies = [];
   const seenLinks = new Set();
 
   for (const year of years) {
-    // Fetch all pages for each year
-    for (let page = 1; page <= 10; page++) {
+    // Only fetch first 3 pages for speed
+    for (let page = 1; page <= 3; page++) {
       const targetUrl = page === 1 
         ? `${SOURCES.moviesda}/tamil-${year}-movies/`
         : `${SOURCES.moviesda}/tamil-${year}-movies/?page=${page}`;

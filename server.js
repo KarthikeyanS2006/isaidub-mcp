@@ -124,6 +124,60 @@ app.get('/api/isaidub/movies', async (req, res) => {
   res.json(movies);
 });
 
+app.get('/api/isaidub/collections', async (req, res) => {
+  try {
+    const { data } = await axios.get(`${SOURCES.isaidub}/movie/tamil-dubbed-movies-collections/`, axiosConfig);
+    const $ = cheerio.load(data);
+    const collections = [];
+
+    $(".f a").each((_, el) => {
+      const href = $(el).attr("href");
+      const title = $(el).text().replace("[+]", "").trim();
+      
+      if (href && href.includes("-collections/") && title) {
+        collections.push({
+          title: title.replace("Tamil Dubbed Collections", "").replace("Collections", "").trim(),
+          link: href.startsWith("http") ? href : SOURCES.isaidub + href,
+          thumbnail: `${SOURCES.isaidub}/uploads/posters/${href.split('/').pop().replace(/-tamil-dubbed-collections|-collections|-tamil-dubbed-movie/g, '')}.jpg`,
+          source: 'isaidub'
+        });
+      }
+    });
+
+    res.json(collections);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/isaidub/collection/:name', async (req, res) => {
+  const { name } = req.params;
+  
+  try {
+    const { data } = await axios.get(`${SOURCES.isaidub}/movie/${name}/`, axiosConfig);
+    const $ = cheerio.load(data);
+    const movies = [];
+
+    $(".f a").each((_, el) => {
+      const href = $(el).attr("href");
+      const title = $(el).text().replace("[+]", "").trim();
+      
+      if (href && href.includes("/movie/") && title && !title.match(/^(Download|Tamil|Home|Contact|Check)/i)) {
+        movies.push({
+          title,
+          link: href.startsWith("http") ? href : SOURCES.isaidub + href,
+          thumbnail: generateISAIDUBThumbnail(title),
+          source: 'isaidub'
+        });
+      }
+    });
+
+    res.json(movies);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/isaidub/search', async (req, res) => {
   const { q } = req.query;
   

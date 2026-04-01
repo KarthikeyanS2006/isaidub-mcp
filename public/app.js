@@ -321,6 +321,11 @@ async function fetchMovies() {
             
             // Observe images for lazy loading
             setTimeout(observeImages, 100);
+            
+            // Load collections for ISAIDUB
+            if (source === 'isaidub') {
+                fetchCollections();
+            }
         }
         
         renderMyList();
@@ -328,6 +333,100 @@ async function fetchMovies() {
         moviesSection.innerHTML = `<p style="text-align:center;color:var(--primary);padding:50px;">Error: ${error.message}</p>`;
     } finally {
         showLoading(false);
+    }
+}
+
+async function fetchCollections() {
+    try {
+        const response = await fetch(`${API_BASE}/api/isaidub/collections`);
+        const collections = await response.json();
+        
+        if (Array.isArray(collections) && collections.length > 0) {
+            const collectionsSection = document.getElementById('collectionsSection');
+            const collectionsGrid = document.getElementById('collectionsGrid');
+            const collectionsCount = document.getElementById('collectionsCount');
+            
+            collectionsCount.textContent = `${collections.length} collections`;
+            collectionsGrid.innerHTML = '';
+            
+            collections.slice(0, 12).forEach(collection => {
+                const card = document.createElement('div');
+                card.className = 'movie-card';
+                card.style.cursor = 'pointer';
+                card.style.width = '180px';
+                card.innerHTML = `
+                    <div class="card-inner">
+                        <img class="movie-img" src="${collection.thumbnail}" alt="${escapeHtml(collection.title)}" loading="lazy" 
+                            onerror="this.style.display='none'; this.parentElement.querySelector('.movie-poster').style.display='flex';">
+                        <div class="movie-poster" style="display:none;background:linear-gradient(135deg,#1a1a1a,#2d2d2d);align-items:center;justify-content:center;font-size:2rem;">
+                            🎬
+                        </div>
+                        <div class="card-overlay">
+                            <div class="card-title">${escapeHtml(collection.title)}</div>
+                            <div class="card-subtitle">Collection</div>
+                        </div>
+                    </div>
+                `;
+                card.addEventListener('click', () => {
+                    openCollection(collection);
+                });
+                collectionsGrid.appendChild(card);
+            });
+            
+            collectionsSection.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error loading collections:', error);
+    }
+}
+
+function openCollection(collection) {
+    modalTitle.textContent = collection.title;
+    modalPoster.style.backgroundImage = `url(${collection.thumbnail})`;
+    modalBackdrop.style.backgroundImage = `url(${collection.thumbnail})`;
+    modalQuality.textContent = 'Collection';
+    modalQuality.style.display = 'inline-block';
+    modalRating.innerHTML = '';
+    modalDirector.innerHTML = '';
+    modalStarring.innerHTML = '';
+    modalSynopsis.textContent = '';
+    
+    qualityOptions.innerHTML = '<p style="color:var(--text-muted);">Loading collection movies...</p>';
+    downloadLinks.innerHTML = '';
+    loadingLinks.style.display = 'none';
+    
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+    
+    closeMobileMenu();
+    fetchCollectionMovies(collection);
+}
+
+async function fetchCollectionMovies(collection) {
+    try {
+        const collectionName = collection.link.split('/movie/')[1].replace(/\/$/, '');
+        const response = await fetch(`${API_BASE}/api/isaidub/collection/${collectionName}`);
+        const movies = await response.json();
+        
+        if (Array.isArray(movies) && movies.length > 0) {
+            let html = `<h4 style="color:var(--primary);margin:15px 0 10px;">${movies.length} Movies in Collection</h4>`;
+            movies.forEach(movie => {
+                html += `
+                    <a href="#" onclick="event.preventDefault();closeModal();openModal({title:'${escapeHtml(movie.title)}',link:'${movie.link}',thumbnail:'${movie.thumbnail || ''}',source:'isaidub'});" 
+                       class="download-btn" style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                        ${movie.thumbnail ? `<img src="${movie.thumbnail}" style="width:50px;height:70px;object-fit:cover;border-radius:4px;" onerror="this.style.display='none'">` : '<div style="width:50px;height:70px;background:#333;border-radius:4px;display:flex;align-items:center;justify-content:center;">🎬</div>'}
+                        <span>${escapeHtml(movie.title)}</span>
+                    </a>
+                `;
+            });
+            downloadLinks.innerHTML = html;
+        } else {
+            downloadLinks.innerHTML = '<p style="color:var(--text-muted);">No movies found in this collection</p>';
+        }
+        qualityOptions.innerHTML = '';
+    } catch (error) {
+        downloadLinks.innerHTML = '<p style="color:var(--text-muted);">Error loading collection</p>';
+        qualityOptions.innerHTML = '';
     }
 }
 

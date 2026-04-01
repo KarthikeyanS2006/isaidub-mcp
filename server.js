@@ -133,12 +133,14 @@ app.get('/api/isaidub/collections', async (req, res) => {
     $(".f a").each((_, el) => {
       const href = $(el).attr("href");
       const title = $(el).text().replace("[+]", "").trim();
+      const img = $(el).find("img").attr("src");
       
       if (href && href.includes("-collections/") && title) {
+        const cleanTitle = title.replace("Tamil Dubbed Collections", "").replace("Tamil Collections", "").replace("Collections", "").trim();
         collections.push({
-          title: title.replace("Tamil Dubbed Collections", "").replace("Collections", "").trim(),
+          title: cleanTitle,
           link: href.startsWith("http") ? href : SOURCES.isaidub + href,
-          thumbnail: `${SOURCES.isaidub}/uploads/posters/${href.split('/').pop().replace(/-tamil-dubbed-collections|-collections|-tamil-dubbed-movie/g, '')}.jpg`,
+          thumbnail: img ? (img.startsWith("http") ? img : SOURCES.isaidub + img) : null,
           source: 'isaidub'
         });
       }

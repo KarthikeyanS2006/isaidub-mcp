@@ -1099,11 +1099,32 @@ function closeMobileMenu() {
 
 if (searchBtn) {
     searchBtn.addEventListener('click', () => {
-        searchMovies(searchInput.value);
+        const query = searchInput ? searchInput.value.trim() : '';
+        if (query) {
+            searchMovies(query);
+        }
+    });
+}
+
+const searchContainer = document.querySelector('.search-container');
+if (searchContainer) {
+    searchContainer.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const query = searchInput ? searchInput.value.trim() : '';
+        if (query) {
+            searchMovies(query);
+        }
     });
 }
 
 if (searchInput) {
+    searchInput.addEventListener('input', () => {
+        const query = searchInput.value.trim();
+        if (query.length >= 2) {
+            searchMovies(query);
+        }
+    });
+    
     searchInput.addEventListener('focus', () => {
         searchSuggestions.style.display = 'block';
     });
@@ -1112,9 +1133,13 @@ if (searchInput) {
         setTimeout(() => searchSuggestions.style.display = 'none', 200);
     });
     
-    searchInput.addEventListener('keypress', (e) => {
+    searchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
-            searchMovies(searchInput.value);
+            e.preventDefault();
+            const query = searchInput.value.trim();
+            if (query) {
+                searchMovies(query);
+            }
         }
     });
 }

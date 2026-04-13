@@ -3,6 +3,11 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import cors from 'cors';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -21,12 +26,19 @@ const axiosConfig = {
   }
 };
 
-async function getMp4Url(url, maxRedirects = 5) {
+async function getMp4Url(url, maxRedirects = 15) {
   let currentUrl = url;
   
   for (let attempts = 0; attempts < maxRedirects; attempts++) {
     try {
-      const response = await axios.get(currentUrl, axiosConfig);
+      const response = await axios.get(currentUrl, {
+        ...axiosConfig,
+        headers: {
+          ...axiosConfig.headers,
+          'Referer': new URL(currentUrl).origin + '/'
+        },
+        maxRedirects: 0
+      });
       const html = response.data;
       
       const mp4Match = html.match(/https?:\/\/[^\s"'<>]+\.mp4[^\s"'<>]*/i);
@@ -34,17 +46,40 @@ async function getMp4Url(url, maxRedirects = 5) {
         return mp4Match[0];
       }
       
+      const cdnMatch = html.match(/https?:\/\/[^\s"'<>]*(?:uptodub|dub)\.[^\s"'<>]*\/download\.php\?dl=[^\s"'<>]*/i);
+      if (cdnMatch) {
+        return cdnMatch[0];
+      }
+      
+      const uptodubMatch = html.match(/https?:\/\/[^\s"'<>]*(?:dub\.)?uptodub\.ch[^\s"'<>]*/i);
+      if (uptodubMatch) {
+        return uptodubMatch[0];
+      }
+      
       const $ = cheerio.load(html);
       
       const dlink = $('div.dlink a').first().attr('href');
-      if (dlink) {
-        currentUrl = dlink.startsWith('http') ? dlink : new URL(dlink, currentUrl).href;
+      if (dlink && dlink.startsWith('http')) {
+        currentUrl = dlink;
         continue;
       }
       
-      const anyDownload = $('a[href*="download"]').first().attr('href');
-      if (anyDownload) {
-        currentUrl = anyDownload.startsWith('http') ? anyDownload : new URL(anyDownload, currentUrl).href;
+      const coralLink = $('a.coral').first().attr('href');
+      if (coralLink) {
+        const fullUrl = coralLink.startsWith('http') ? coralLink : new URL(coralLink, currentUrl).href;
+        currentUrl = fullUrl;
+        continue;
+      }
+      
+      const downloadMatch = html.match(/href="(https?:\/\/[^\s"]+)"[^>]*>\s*[^<]*(?:Download|download)[^<]*/i);
+      if (downloadMatch) {
+        currentUrl = downloadMatch[1];
+        continue;
+      }
+      
+      const dubpageMatch = html.match(/href="(https?:\/\/(?:dubpage|dubmv|dub)\.[^\s"]+)"[^>]*>/i);
+      if (dubpageMatch) {
+        currentUrl = dubpageMatch[1];
         continue;
       }
       
@@ -61,11 +96,11 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/', (req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.use('/styles.css', express.static(path.join(process.cwd(), 'public', 'styles.css')));
-app.use('/app.js', express.static(path.join(process.cwd(), 'public', 'app.js')));
+app.use('/styles.css', express.static(path.join(__dirname, 'public', 'styles.css')));
+app.use('/app.js', express.static(path.join(__dirname, 'public', 'app.js')));
 
 // =====================
 // ISAIDUB API
@@ -131,26 +166,46 @@ app.get('/api/isaidub/search', async (req, res) => {
     return res.status(400).json({ error: "Query parameter 'q' is required" });
   }
   
+  const searchTerm = q.toLowerCase().trim();
+  const results = [];
+  const seenLinks = new Set();
+  
   try {
-    const { data } = await axios.get(`${SOURCES.isaidub}/?s=${encodeURIComponent(q)}`, axiosConfig);
-    const $ = cheerio.load(data);
-    const results = [];
-
-    $(".f a").each((_, el) => {
-      const href = $(el).attr("href");
-      const title = $(el).text().replace("[+]", "").trim();
-      
-      if (href && href.includes("/movie/") && title && !title.match(/^(Download|Tamil|Home|Contact|Check)/i)) {
-        results.push({
-          title,
-          link: href.startsWith("http") ? href : SOURCES.isaidub + href,
-          thumbnail: generateISAIDUBThumbnail(title),
-          source: 'isaidub'
+    for (const year of ['2026', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018']) {
+      try {
+        const yearUrl = `${SOURCES.isaidub}/tamil-${year}-dubbed-movies/`;
+        const yearData = await axios.get(yearUrl, axiosConfig);
+        const $year = cheerio.load(yearData.data);
+        
+        $year(".f a").each((_, el) => {
+          const href = $year(el).attr("href");
+          const title = $year(el).text().replace("[+]", "").trim();
+          
+          if (href && href.includes("/movie/") && title && title.toLowerCase().includes(searchTerm) && !seenLinks.has(href)) {
+            seenLinks.add(href);
+            const titleLower = title.toLowerCase();
+            let score = 0;
+            if (titleLower.startsWith(searchTerm)) score = 3;
+            else if (titleLower.includes(searchTerm)) score = 2;
+            else score = 1;
+            
+            results.push({
+              title,
+              link: href.startsWith("http") ? href : SOURCES.isaidub + href,
+              thumbnail: generateISAIDUBThumbnail(title),
+              source: 'isaidub',
+              score
+            });
+          }
         });
-      }
-    });
+        
+        if (results.length >= 20) break;
+      } catch (e) {}
+    }
+    
+    results.sort((a, b) => b.score - a.score);
 
-    res.json(results);
+    res.json(results.slice(0, 50));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -203,6 +258,66 @@ app.get('/api/isaidub/details', async (req, res) => {
   }
 });
 
+app.get('/api/isaidub/mp4', async (req, res) => {
+  const { url } = req.query;
+  
+  if (!url) {
+    return res.status(400).json({ error: "URL parameter is required" });
+  }
+  
+  try {
+    const response = await axios.get(url, { ...axiosConfig, timeout: 15000 });
+    const html = response.data;
+    
+    let mp4Url = null;
+    
+    const mp4Match = html.match(/https?:\/\/[^\s"'<>]+\.mp4[^\s"'<>]*/i);
+    if (mp4Match) mp4Url = mp4Match[0];
+    
+    if (!mp4Url) {
+      const cdnMatch = html.match(/https?:\/\/[^\s"'<>]*(?:uptodub|dub)\.[^\s"'<>]*\/download\.php[^\s"'<>]*/i);
+      if (cdnMatch) mp4Url = cdnMatch[0];
+    }
+    
+    if (!mp4Url) {
+      const coralMatch = html.match(/href="([^"]+)"[^>]*>\s*<strong>([^<]+)<\/strong>/);
+      if (coralMatch) {
+        const downloadPageUrl = coralMatch[1].startsWith('http') 
+          ? coralMatch[1] 
+          : new URL(coralMatch[1], url).href;
+        
+        try {
+          const dlResponse = await axios.get(downloadPageUrl, { ...axiosConfig, timeout: 15000 });
+          const dlHtml = dlResponse.data;
+          
+          const dubpageMatch = dlHtml.match(/href="(https?:\/\/(?:dubpage|dubmv|dub)\.[^"]+)"[^>]*>/i);
+          if (dubpageMatch) {
+            try {
+              const dubResponse = await axios.get(dubpageMatch[1], { ...axiosConfig, timeout: 15000 });
+              const dubHtml = dubResponse.data;
+              
+              const finalMatch = dubHtml.match(/href="(https?:\/\/[^\s"]+)"[^>]*>\s*[^<]*(?:Download|download)[^<]*/i);
+              if (finalMatch) {
+                try {
+                  const finalResponse = await axios.get(finalMatch[1], { ...axiosConfig, timeout: 15000 });
+                  const finalHtml = finalResponse.data;
+                  
+                  const uptodubMatch = finalHtml.match(/(https?:\/\/[^\s"'<>]*(?:uptodub|dub)\.[^\s"'<>]*\/download\.php[^\s"'<>]*)/i);
+                  if (uptodubMatch) mp4Url = uptodubMatch[1];
+                } catch (e) {}
+              }
+            } catch (e) {}
+          }
+        } catch (e) {}
+      }
+    }
+    
+    res.json({ mp4Url });
+  } catch (error) {
+    res.json({ mp4Url: null, error: error.message });
+  }
+});
+
 app.get('/api/isaidub/download', async (req, res) => {
   const { url } = req.query;
   
@@ -211,113 +326,34 @@ app.get('/api/isaidub/download', async (req, res) => {
   }
   
   try {
-    const { data } = await axios.get(url, axiosConfig);
+    const { data } = await axios.get(url, { ...axiosConfig, timeout: 15000 });
     const $ = cheerio.load(data);
     
-    const result = { download: [], watch: [], info: {}, episodes: [] };
-    const seenPages = new Set();
+    const result = { download: [], watch: [], info: {} };
     const seenDownloads = new Set();
-    const qualityQueue = [];
     
-    const hasEpisodes = $(".mv-content").length > 0;
-    
-    if (hasEpisodes) {
-      $(".mv-content").each((_, el) => {
-        const linkEl = $(el).find("a.coral");
-        const href = linkEl.attr("href");
-        const title = linkEl.find("strong").text().trim() || $(el).find("a").text().trim();
-        const imgEl = $(el).find("img");
-        const thumbnail = imgEl.attr("src") ? SOURCES.isaidub + imgEl.attr("src") : null;
-        const sizeEl = $(el).find("li").filter((i, l) => $(l).text().includes("File Size"));
-        const fileSize = sizeEl.length > 0 ? sizeEl.text().replace("File Size:", "").trim() : null;
-        
-        if (href) {
-          const dlUrl = href.startsWith("http") ? href : SOURCES.isaidub + href;
-          if (!seenDownloads.has(dlUrl)) {
-            seenDownloads.add(dlUrl);
-            result.episodes.push({
-              server: title || 'Episode',
-              url: dlUrl,
-              thumbnail: thumbnail,
-              fileSize: fileSize,
-              mp4Url: null
-            });
-          }
-        }
-      });
+    $(".mv-content").each((_, el) => {
+      const linkEl = $(el).find("a.coral");
+      const href = linkEl.attr("href");
+      const title = linkEl.find("strong").text().trim() || $(el).find("a").text().trim();
+      const imgEl = $(el).find("img");
+      const thumbnail = imgEl.attr("src") ? SOURCES.isaidub + imgEl.attr("src") : null;
+      const sizeEl = $(el).find("li").filter((i, l) => $(l).text().includes("File Size"));
+      const fileSize = sizeEl.length > 0 ? sizeEl.text().replace("File Size:", "").trim() : null;
       
-      for (const ep of result.episodes) {
-        const mp4Url = await getMp4Url(ep.url);
-        if (mp4Url) ep.mp4Url = mp4Url;
-      }
-      
-      return res.json(result);
-    }
-    
-    $("a").each((_, el) => {
-      const href = $(el).attr("href");
-      const text = $(el).text().trim();
-      if (href && href.includes("-movie-") && !href.includes("/download/")) {
-        const fullUrl = href.startsWith("http") ? href : SOURCES.isaidub + href;
-        if (!seenPages.has(fullUrl)) {
-          seenPages.add(fullUrl);
-          qualityQueue.push({ quality: text || 'Quality', url: fullUrl });
-        }
-      }
-    });
-    
-    $("a.coral").each((_, el) => {
-      const href = $(el).attr("href");
-      const text = $(el).text().trim();
       if (href) {
         const dlUrl = href.startsWith("http") ? href : SOURCES.isaidub + href;
         if (!seenDownloads.has(dlUrl)) {
           seenDownloads.add(dlUrl);
-          result.download.push({ server: text || 'Download', url: dlUrl, mp4Url: null });
+          result.download.push({
+            server: title || 'Download',
+            url: dlUrl,
+            thumbnail: thumbnail,
+            fileSize: fileSize
+          });
         }
       }
     });
-    
-    let queueIndex = 0;
-    while (queueIndex < qualityQueue.length) {
-      const qpage = qualityQueue[queueIndex++];
-      
-      try {
-        const qdata = await axios.get(qpage.url, axiosConfig);
-        const $q = cheerio.load(qdata.data);
-        
-        $q("a.coral").each((_, el) => {
-          const href = $(el).attr("href");
-          const text = $(el).text().trim();
-          if (href) {
-            const dlUrl = href.startsWith("http") ? href : SOURCES.isaidub + href;
-            if (!seenDownloads.has(dlUrl)) {
-              seenDownloads.add(dlUrl);
-              result.download.push({ server: text || qpage.quality, url: dlUrl, mp4Url: null });
-            }
-          }
-        });
-        
-        $q("a").each((_, el) => {
-          const href = $(el).attr("href");
-          const text = $(el).text().trim();
-          if (href && href.includes("-movie-") && !href.includes("/download/")) {
-            const fullUrl = href.startsWith("http") ? href : SOURCES.isaidub + href;
-            if (!seenPages.has(fullUrl)) {
-              seenPages.add(fullUrl);
-              qualityQueue.push({ quality: text || 'Quality', url: fullUrl });
-            }
-          }
-        });
-      } catch (e) {}
-    }
-    
-    for (const item of result.download) {
-      const mp4Url = await getMp4Url(item.url);
-      if (mp4Url) {
-        item.mp4Url = mp4Url;
-      }
-    }
     
     res.json(result);
   } catch (error) {
@@ -392,35 +428,55 @@ app.get('/api/moviesda/search', async (req, res) => {
     return res.status(400).json({ error: "Query parameter 'q' is required" });
   }
   
+  const searchTerm = q.toLowerCase().trim();
+  const results = [];
+  const seenLinks = new Set();
+  
   try {
-    const { data } = await axios.get(`${SOURCES.moviesda}/?s=${encodeURIComponent(q)}`, axiosConfig);
-    const $ = cheerio.load(data);
-    const results = [];
-
-    $("div.f a").each((_, el) => {
-      const href = $(el).attr("href");
-      const title = $(el).text().replace("[+]", "").trim();
-      
-      if (href && title && href.includes('movie') && !title.match(/^(Home|Download|Tamil)/i)) {
-        const yearMatch = title.match(/\((\d{4})\)/);
-        const movieYear = yearMatch ? yearMatch[1] : '';
-        const nameForUrl = title.toLowerCase()
-          .replace(/[^a-z0-9\s]/g, '')
-          .replace(/\s+/g, '-')
-          .replace(/-+/g, '-');
+    for (const year of ['2026', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017']) {
+      try {
+        const yearUrl = `${SOURCES.moviesda}/tamil-${year}-movies/`;
+        const yearData = await axios.get(yearUrl, axiosConfig);
+        const $year = cheerio.load(yearData.data);
         
-        results.push({
-          title,
-          link: href.startsWith("http") ? href : SOURCES.moviesda + href,
-          thumbnail: `${SOURCES.moviesda}/uploads/posters/${nameForUrl}.jpg`,
-          year: movieYear,
-          source: 'moviesda'
+        $year("div.f a").each((_, el) => {
+          const href = $year(el).attr("href");
+          const title = $year(el).text().replace("[+]", "").trim();
+          
+          if (href && title && title.toLowerCase().includes(searchTerm) && !seenLinks.has(href)) {
+            seenLinks.add(href);
+            const yearMatch = title.match(/\((\d{4})\)/);
+            const movieYear = yearMatch ? yearMatch[1] : year;
+            const nameForUrl = title.toLowerCase()
+              .replace(/[^a-z0-9\s]/g, '')
+              .replace(/\s+/g, '-');
+            
+            const titleLower = title.toLowerCase();
+            let score = 0;
+            if (titleLower.startsWith(searchTerm)) score = 3;
+            else if (titleLower.includes(searchTerm)) score = 2;
+            else score = 1;
+            
+            results.push({
+              title,
+              link: href.startsWith("http") ? href : SOURCES.moviesda + href,
+              thumbnail: `${SOURCES.moviesda}/uploads/posters/${nameForUrl}.jpg`,
+              year: movieYear,
+              source: 'moviesda',
+              score
+            });
+          }
         });
-      }
-    });
+        
+        if (results.length >= 20) break;
+      } catch (e) {}
+    }
+    
+    results.sort((a, b) => b.score - a.score);
 
-    res.json(results);
+    res.json(results.slice(0, 50));
   } catch (error) {
+    console.log(`Outer error: ${error.message}`);
     res.json([]);
   }
 });
@@ -494,6 +550,61 @@ app.get('/api/moviesda/details', async (req, res) => {
         });
       }
     });
+    
+    if (details.qualities.length === 0 || details.qualities.length === 1) {
+      const pageContent = $('body').html();
+      const qualityPatterns = [
+        { pattern: /href="([^"]*original[^"]*hd[^"]*)"/gi, quality: 'Original HD' },
+        { pattern: /href="([^"]*720p[^"]*hd[^"]*)"/gi, quality: '720p HD' },
+        { pattern: /href="([^"]*1080p[^"]*hd[^"]*)"/gi, quality: '1080p HD' },
+        { pattern: /href="([^"]*480p[^"]*hd[^"]*)"/gi, quality: '480p HD' },
+        { pattern: /href="([^"]*360p[^"]*hd[^"]*)"/gi, quality: '360p HD' },
+        { pattern: /href="([^"]*320p[^"]*hd[^"]*)"/gi, quality: '320p HD' },
+        { pattern: /href="([^"]*original[^"]*)"/gi, quality: 'Original' },
+        { pattern: /href="([^"]*720p[^"]*)"/gi, quality: '720p' },
+        { pattern: /href="([^"]*1080p[^"]*)"/gi, quality: '1080p' },
+        { pattern: /href="([^"]*480p[^"]*)"/gi, quality: '480p' }
+      ];
+      
+      const seenUrls = new Set();
+      qualityPatterns.forEach(({ pattern, quality }) => {
+        let match;
+        while ((match = pattern.exec(pageContent)) !== null) {
+          const href = match[1];
+          if (href && href.includes('/') && !seenUrls.has(href)) {
+            seenUrls.add(href);
+            details.qualities.push({
+              quality,
+              url: href.startsWith("http") ? href : SOURCES.moviesda + href
+            });
+          }
+        }
+      });
+      
+      if (details.qualities.length <= 2) {
+        const qualities = [
+          { suffix: 'movie-original-hd', name: 'Original HD' },
+          { suffix: 'movie-1080p-hd', name: '1080p HD' },
+          { suffix: 'movie-720p-hd', name: '720p HD' },
+          { suffix: 'movie-480p-hd', name: '480p HD' },
+          { suffix: 'movie-360p-hd', name: '360p HD' },
+          { suffix: 'movie-320p-hd', name: '320p HD' }
+        ];
+        
+        const urlParts = url.match(/https?:\/\/[^/]+\/([^-]+-[^-]+)-\d{4}-movie\//);
+        if (urlParts) {
+          const movieName = urlParts[1];
+          const base = `${url.match(/https?:\/\/[^/]+/)[0]}/${movieName}`;
+          qualities.forEach(({ suffix, name }) => {
+            const newUrl = `${base}-movie-${suffix}/`;
+            if (!seenUrls.has(newUrl) && newUrl !== url) {
+              seenUrls.add(newUrl);
+              details.qualities.push({ quality: name, url: newUrl });
+            }
+          });
+        }
+      }
+    }
     
     res.json(details);
   } catch (error) {

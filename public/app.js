@@ -237,17 +237,18 @@ window.addEventListener('load', () => {
     if (sourceTab) sourceTab.classList.add('active');
     if (catTab) catTab.classList.add('active');
     
-    // Hide splash screen when movies start loading
     const savedTheme = Storage.getTheme();
     applyTheme(savedTheme);
     
     checkApiStatus();
+    hideSplash();
 });
 
-// Hide splash screen
+// Hide splash screen immediately
 function hideSplash() {
-    if (splashScreen) {
-        splashScreen.classList.add('hidden');
+    if (splashScreen && !splashScreen.classList.contains('hidden')) {
+        splashScreen.style.opacity = '0';
+        splashScreen.style.visibility = 'hidden';
         setTimeout(() => {
             splashScreen.style.display = 'none';
         }, 300);
@@ -294,6 +295,11 @@ let displayedMovies = 0;
 let isLoadingMore = false;
 const INITIAL_LOAD = 150;
 const LOAD_MORE_COUNT = 50;
+
+let searchTimeout = null;
+let searchCache = new Map();
+const SEARCH_CACHE_MAX = 50;
+let searchSuggestionsData = [];
 
 async function fetchMovies() {
     showLoading(true);
@@ -643,75 +649,76 @@ function closeTrailerModal() {
     trailerModal.classList.remove('active');
 }
 
-async function searchMovies(query) {
+async function searchMovies(query, isSuggestion = false) {
     if (!query.trim()) return;
+    
+    const cacheKey = `${currentSource}:${query.toLowerCase()}`;
+    if (searchCache.has(cacheKey)) {
+        const cached = searchCache.get(cacheKey);
+        if (!isSuggestion) {
+            displaySearchResults(cached, query);
+        }
+        return;
+    }
     
     searchSuggestions.style.display = 'none';
     moviesSection.style.display = 'block';
     myListSection.style.display = 'none';
     
-    const searchTerm = query.toLowerCase().trim();
-    
-    // First search from already loaded movies (instant)
-    let results = allMovies.filter(m => 
-        m.title && m.title.toLowerCase().includes(searchTerm)
-    );
-    
-    if (results.length === 0) {
-        // If no results, show loading and search all years
+    if (!isSuggestion) {
         moviesSection.innerHTML = `
             <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:50vh;gap:20px;">
                 <div class="loader" style="width:60px;height:60px;border:4px solid var(--bg-lighter);border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite;"></div>
-                <p style="color:var(--text-muted);">Searching all years for "${query}" in ${currentSource === 'isaidub' ? 'Tamil Dubbed' : 'Tamil Movies'}...</p>
+                <p style="color:var(--text-muted);">Searching for "${query}"...</p>
             </div>
         `;
-        
-        try {
-            const years = ['2026', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017', '2016', '2015'];
-            
-            for (const year of years) {
-                try {
-                    const response = await fetch(`${API_BASE}/api/${currentSource}/movies?category=${year}`);
-                    if (!response.ok) continue;
-                    
-                    const text = await response.text();
-                    if (!text || text.trim() === '' || !text.startsWith('[')) continue;
-                    
-                    const movies = JSON.parse(text);
-                    if (Array.isArray(movies)) {
-                        const filtered = movies.filter(m => 
-                            m.title && m.title.toLowerCase().includes(searchTerm)
-                        );
-                        results.push(...filtered);
-                    }
-                } catch (e) {}
-            }
-        } catch (error) {}
     }
     
+    try {
+        const response = await fetch(`${API_BASE}/api/${currentSource}/search?q=${encodeURIComponent(query)}`);
+        const results = await response.json();
+        
+        searchCache.set(cacheKey, results);
+        if (searchCache.size > SEARCH_CACHE_MAX) {
+            const firstKey = searchCache.keys().next().value;
+            searchCache.delete(firstKey);
+        }
+        
+        if (!isSuggestion) {
+            displaySearchResults(results, query);
+        }
+    } catch (error) {
+        if (!isSuggestion) {
+            moviesSection.innerHTML = `<p style="text-align:center;color:#b3b3b3;padding:50px;">Search error: ${error.message}</p>`;
+        }
+    }
+    
+    closeMobileMenu();
+}
+
+function displaySearchResults(results, query) {
     if (results.length === 0) {
-        const sourceHint = currentSource === 'isaidub' ? '<br><small style="color:#ff6b00;">Tip: Try switching to "Tamil Movies" tab for Tamil movies like "Remo"</small>' : '<br><small style="color:#ff6b00;">Tip: Try switching to "Tamil Dubbed" tab for dubbed movies</small>';
+        const sourceHint = currentSource === 'isaidub' 
+            ? '<br><small style="color:#ff6b00;">Tip: Try switching to "Tamil Movies" tab for Tamil movies</small>' 
+            : '<br><small style="color:#ff6b00;">Tip: Try switching to "Tamil Dubbed" tab for dubbed movies</small>';
         moviesSection.innerHTML = `<p style="text-align:center;color:#b3b3b3;padding:50px;">No movies found for "${query}"${sourceHint}</p>`;
     } else {
-        // Remove duplicates
         const seen = new Set();
-        results = results.filter(m => {
+        const uniqueResults = results.filter(m => {
             if (seen.has(m.link)) return false;
             seen.add(m.link);
             return true;
         });
         
-        allMovies = results;
-        heroMovies = results.slice(0, 5);
+        allMovies = uniqueResults;
+        heroMovies = uniqueResults.slice(0, 5);
         createHeroIndicators();
         if (heroMovies.length > 0) {
             updateHeroSection(heroMovies[0]);
         }
         
-        createMovieRows(results);
+        createMovieRows(uniqueResults);
     }
-    
-    closeMobileMenu();
 }
 
 function createMovieCard(movie, showRemove = false) {
@@ -888,24 +895,11 @@ async function fetchISAIDUBDownloadLinks(url, quality) {
     loadingLinks.style.display = 'flex';
     downloadLinks.innerHTML = '';
     fileInfo.style.display = 'none';
-    updateProgress(0, 'Connecting...');
-    
-    let progressValue = 0;
-    let progressMsg = 'Connecting...';
-    const progressInterval = setInterval(() => {
-        if (progressValue < 35) {
-            progressValue += Math.random() * 3;
-            updateProgress(Math.min(progressValue, 35), progressMsg);
-        }
-    }, 200);
+    updateProgress(10, 'Fetching links...');
     
     try {
-        updateProgress(10, 'Fetching links from ISAIDUB...');
-        progressMsg = 'Fetching links from ISAIDUB...';
+        updateProgress(30, 'Getting download page...');
         const response = await fetch(`${API_BASE}/api/isaidub/download?url=${encodeURIComponent(url)}`);
-        clearInterval(progressInterval);
-        updateProgress(40, 'Processing links...');
-        
         const data = await response.json();
         
         if (data.error) {
@@ -914,52 +908,30 @@ async function fetchISAIDUBDownloadLinks(url, quality) {
             return;
         }
         
-        const totalItems = (data.episodes?.length || 0) + (data.download?.length || 0);
+        updateProgress(50, 'Extracting MP4...');
         let html = '';
-        let processed = 0;
-        
-        if (data.episodes && data.episodes.length > 0) {
-            html += '<h4 style="color:var(--primary);margin:15px 0 10px;">Episodes</h4>';
-            for (const ep of data.episodes) {
-                const downloadUrl = ep.mp4Url || ep.url;
-                const thumbHtml = ep.thumbnail ? `<img src="${ep.thumbnail}" alt="" style="width:80px;height:45px;object-fit:cover;border-radius:4px;margin-right:10px;">` : '';
-                const sizeHtml = ep.fileSize ? `<span style="font-size:12px;color:#888;">${ep.fileSize}</span>` : '';
-                html += `<a href="${downloadUrl}" download="${ep.server}.mp4" target="_blank" class="download-btn" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
-                    ${thumbHtml}
-                    <div style="flex:1;">
-                        <div>${ep.server}</div>
-                        ${sizeHtml}
-                    </div>
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-                </a>`;
-                processed++;
-                updateProgress(40 + Math.floor((processed / totalItems) * 50), `Processing ${processed}/${totalItems}...`);
-                await new Promise(r => setTimeout(r, 30));
-            }
-        }
         
         if (data.download && data.download.length > 0) {
             html += '<h4 style="color:var(--primary);margin:15px 0 10px;">Download Links</h4>';
             for (const link of data.download) {
-                const downloadUrl = link.mp4Url || link.url;
-                html += `<a href="${downloadUrl}" download="${link.server}.mp4" target="_blank" class="download-btn">
+                updateProgress(70, 'Getting MP4 URL...');
+                let mp4Url = link.url;
+                
+                try {
+                    const mp4Response = await fetch(`${API_BASE}/api/isaidub/mp4?url=${encodeURIComponent(link.url)}`);
+                    const mp4Data = await mp4Response.json();
+                    if (mp4Data.mp4Url) mp4Url = mp4Data.mp4Url;
+                } catch (e) {}
+                
+                const serverName = link.server || link.url.split('/').pop() || 'Download';
+                html += `<a href="${mp4Url}" download="${serverName}.mp4" target="_blank" class="download-btn">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-                    ${link.server}
+                    ${serverName}
                 </a>`;
-                processed++;
-                updateProgress(40 + Math.floor((processed / totalItems) * 50), `Processing ${processed}/${totalItems}...`);
-                await new Promise(r => setTimeout(r, 30));
             }
         }
         
-        if (data.watch && data.watch.length > 0) {
-            data.watch.forEach(link => {
-                html += `<a href="${link.url}" target="_blank" class="watch-btn">${link.server} - Watch Online</a>`;
-            });
-        }
-        
         updateProgress(100, 'Complete!');
-        await new Promise(r => setTimeout(r, 300));
         
         if (html) {
             downloadLinks.innerHTML = html;
@@ -967,7 +939,6 @@ async function fetchISAIDUBDownloadLinks(url, quality) {
             downloadLinks.innerHTML = '<p class="error-msg">No download links found</p>';
         }
     } catch (error) {
-        clearInterval(progressInterval);
         downloadLinks.innerHTML = `<p class="error-msg">Error: ${error.message}</p>`;
     } finally {
         loadingLinks.style.display = 'none';
@@ -978,28 +949,14 @@ async function fetchMoviesdaDownloadLinks(url) {
     loadingLinks.style.display = 'flex';
     downloadLinks.innerHTML = '';
     fileInfo.style.display = 'none';
-    updateProgress(0, 'Connecting...');
-    
-    let progressValue = 0;
-    let progressMsg = 'Connecting...';
-    const progressInterval = setInterval(() => {
-        if (progressValue < 35) {
-            progressValue += Math.random() * 3;
-            updateProgress(Math.min(progressValue, 35), progressMsg);
-        }
-    }, 200);
+    updateProgress(10, 'Fetching links...');
     
     try {
-        updateProgress(10, 'Fetching links from Moviesda...');
-        progressMsg = 'Fetching links from Moviesda...';
         const response = await fetch(`${API_BASE}/api/moviesda/download?url=${encodeURIComponent(url)}`);
-        clearInterval(progressInterval);
-        updateProgress(40, 'Processing links...');
+        updateProgress(50, 'Processing...');
         const data = await response.json();
         
-        const totalItems = data.download?.length || 0;
         let html = '';
-        let processed = 0;
         
         if (data.download && data.download.length > 0) {
             html += '<h4 style="color:var(--primary);margin:15px 0 10px;">Download Links</h4>';
@@ -1009,10 +966,8 @@ async function fetchMoviesdaDownloadLinks(url) {
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                     ${link.server}
                 </a>`;
-                processed++;
-                updateProgress(40 + Math.floor((processed / totalItems) * 50), `Processing ${processed}/${totalItems}...`);
-                await new Promise(r => setTimeout(r, 30));
             }
+            updateProgress(80, 'Loading thumbnails...');
         }
         
         if (data.watch && data.watch.length > 0) {
@@ -1025,16 +980,14 @@ async function fetchMoviesdaDownloadLinks(url) {
         }
         
         updateProgress(100, 'Complete!');
-        await new Promise(r => setTimeout(r, 300));
         
         if (html) {
             downloadLinks.innerHTML = html;
         } else {
-            downloadLinks.innerHTML = '<p class="error-msg">No download links found. The movie may be new and links not yet available.</p>';
+            downloadLinks.innerHTML = '<p class="error-msg">No download links found.</p>';
         }
     } catch (error) {
-        clearInterval(progressInterval);
-        downloadLinks.innerHTML = `<p class="error-msg">Error loading downloads: ${error.message}</p>`;
+        downloadLinks.innerHTML = `<p class="error-msg">Error: ${error.message}</p>`;
     } finally {
         loadingLinks.style.display = 'none';
     }
@@ -1120,13 +1073,24 @@ if (searchContainer) {
 if (searchInput) {
     searchInput.addEventListener('input', () => {
         const query = searchInput.value.trim();
+        
+        if (searchTimeout) clearTimeout(searchTimeout);
+        
         if (query.length >= 2) {
-            searchMovies(query);
+            searchTimeout = setTimeout(async () => {
+                await fetchSearchSuggestions(query);
+            }, 150);
+        } else {
+            searchSuggestions.innerHTML = '';
+            searchSuggestions.style.display = 'none';
         }
     });
     
     searchInput.addEventListener('focus', () => {
-        searchSuggestions.style.display = 'block';
+        const query = searchInput.value.trim();
+        if (query.length >= 2 && searchSuggestionsData.length > 0) {
+            searchSuggestions.style.display = 'block';
+        }
     });
     
     searchInput.addEventListener('blur', () => {
@@ -1136,12 +1100,59 @@ if (searchInput) {
     searchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
+            if (searchTimeout) clearTimeout(searchTimeout);
             const query = searchInput.value.trim();
             if (query) {
                 searchMovies(query);
             }
         }
     });
+}
+
+async function fetchSearchSuggestions(query) {
+    const cacheKey = `${currentSource}:${query.toLowerCase()}`;
+    
+    if (searchCache.has(cacheKey)) {
+        const results = searchCache.get(cacheKey);
+        searchSuggestionsData = results.slice(0, 8);
+        showSearchSuggestions();
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/${currentSource}/search?q=${encodeURIComponent(query)}`);
+        const results = await response.json();
+        
+        searchCache.set(cacheKey, results);
+        searchSuggestionsData = results.slice(0, 8);
+        showSearchSuggestions();
+    } catch (error) {
+        searchSuggestions.style.display = 'none';
+    }
+}
+
+function showSearchSuggestions() {
+    if (searchSuggestionsData.length > 0) {
+        searchSuggestions.innerHTML = searchSuggestionsData.map(movie => `
+            <div class="suggestion-item" data-title="${escapeHtml(movie.title)}" data-link="${movie.link}">
+                <img src="${movie.thumbnail || ''}" alt="" onerror="this.style.display='none'" loading="lazy">
+                <span>${escapeHtml(movie.title)}</span>
+                <small>${movie.source === 'isaidub' ? 'Tamil Dubbed' : 'Tamil'}</small>
+            </div>
+        `).join('');
+        
+        searchSuggestions.querySelectorAll('.suggestion-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const title = item.dataset.title;
+                searchInput.value = title;
+                searchMovies(title, true);
+            });
+        });
+        
+        searchSuggestions.style.display = 'block';
+    } else {
+        searchSuggestions.style.display = 'none';
+    }
 }
 
 document.querySelectorAll('.chip').forEach(chip => {

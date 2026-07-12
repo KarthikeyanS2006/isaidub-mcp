@@ -5,16 +5,19 @@
 }
 
 :root {
-    /* Dark Mode (Default) */
     --primary: #ff6b00;
     --primary-dark: #e65c00;
     --primary-light: #ff8533;
     --accent: #ff6b00;
     --bg: #141414;
+    --bg-rgb: 20, 20, 20;
     --bg-light: #1f1f1f;
     --bg-lighter: #2d2d2d;
+    --dark-light: #1f1f1f;
+    --dark-lighter: #2d2d2d;
     --card-bg: #1a1a1a;
     --text: #ffffff;
+    --text-rgb: 255, 255, 255;
     --text-muted: #b3b3b3;
     --border: #333;
     --shadow: rgba(0, 0, 0, 0.5);
@@ -26,12 +29,16 @@
     --primary-light: #ff8533;
     --accent: #ff6b00;
     --bg: #ffffff;
+    --bg-rgb: 255, 255, 255;
     --bg-light: #f5f5f5;
     --bg-lighter: #e8e8e8;
+    --dark-light: #e8e8e8;
+    --dark-lighter: #d0d0d0;
     --card-bg: #ffffff;
-    --text: #1a1a1a;
-    --text-muted: #666666;
-    --border: #ddd;
+    --text: #000000;
+    --text-rgb: 0, 0, 0;
+    --text-muted: #555555;
+    --border: #ccc;
     --shadow: rgba(0, 0, 0, 0.1);
 }
 
@@ -53,7 +60,7 @@ main, .movies-section {
 .splash-screen {
     position: fixed;
     inset: 0;
-    background: #141414;
+    background: var(--bg);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -77,11 +84,35 @@ main, .movies-section {
 .splash-spinner {
     width: 30px;
     height: 30px;
-    border: 3px solid #2d2d2d;
-    border-top-color: #ff6b00;
+    border: 3px solid var(--bg-lighter);
+    border-top-color: var(--primary);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
     margin-top: 20px;
+}
+
+.splash-status {
+    margin-top: 16px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+.splash-progress-track {
+    margin-top: 12px;
+    width: 200px;
+    height: 3px;
+    background: var(--bg-lighter);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.splash-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: var(--primary);
+    border-radius: 2px;
+    transition: width 0.4s ease;
 }
 
 @keyframes spin {
@@ -100,7 +131,7 @@ main, .movies-section {
     align-items: center;
     padding: 0 4%;
     z-index: 100;
-    background: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, transparent 100%);
+    background: linear-gradient(to bottom, rgba(var(--bg-rgb), 0.95) 0%, transparent 100%);
     transition: background 0.3s;
 }
 
@@ -235,14 +266,14 @@ main, .movies-section {
 .search-container {
     display: flex;
     align-items: center;
-    background: rgba(255,255,255,0.1);
+    background: rgba(var(--text-rgb), 0.1);
     border-radius: 4px;
     padding: 5px 10px;
     transition: all 0.3s;
 }
 
 .search-container:focus-within {
-    background: rgba(255,255,255,0.2);
+    background: rgba(var(--text-rgb), 0.15);
     width: 250px;
 }
 
@@ -257,12 +288,9 @@ main, .movies-section {
     transition: width 0.3s;
 }
 
-.search-container input:focus {
-    width: 180px;
-}
-
 .search-container input::placeholder {
     color: var(--text-muted);
+    opacity: 0.7;
 }
 
 .search-container button {
@@ -374,7 +402,7 @@ main, .movies-section {
     justify-content: center;
     gap: 30px;
     padding: 20px 4%;
-    background: rgba(20,20,20,0.98);
+    background: rgba(var(--bg-rgb), 0.98);
     backdrop-filter: blur(10px);
     z-index: 90;
     flex-wrap: wrap;
@@ -441,7 +469,7 @@ main {
     inset: 0;
     background: 
         linear-gradient(to top, var(--bg) 0%, transparent 50%),
-        linear-gradient(to right, rgba(0,0,0,0.9) 0%, transparent 70%),
+        linear-gradient(to right, rgba(var(--bg-rgb), 0.92) 0%, transparent 70%),
         linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 40%);
 }
 
@@ -458,6 +486,7 @@ main {
     font-weight: 800;
     line-height: 1.05;
     margin-bottom: 15px;
+    color: #ffffff;
     text-shadow: 3px 3px 6px rgba(0,0,0,0.6);
     opacity: 0;
     animation: heroFadeIn 0.8s ease forwards;
@@ -467,7 +496,7 @@ main {
 .hero-description {
     font-size: 1.15rem;
     line-height: 1.6;
-    color: var(--text);
+    color: #ffffff;
     text-shadow: 1px 1px 3px rgba(0,0,0,0.6);
     margin-bottom: 25px;
     opacity: 0;
@@ -537,7 +566,7 @@ main {
     height: 80px;
     background: rgba(0,0,0,0.6);
     border: none;
-    color: var(--text);
+    color: #ffffff;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -548,7 +577,7 @@ main {
 }
 
 .slider-prev:hover, .slider-next:hover {
-    background: rgba(0,0,0,0.9);
+    background: rgba(0,0,0,0.85);
     transform: scale(1.1);
 }
 
@@ -1461,7 +1490,7 @@ body.reduce-motion .hero-backdrop {
 .icon-btn {
     width: 40px;
     height: 40px;
-    background: rgba(255,255,255,0.1);
+    background: rgba(var(--text-rgb), 0.08);
     border: none;
     border-radius: 50%;
     color: var(--text);
@@ -1473,7 +1502,7 @@ body.reduce-motion .hero-backdrop {
 }
 
 .icon-btn:hover {
-    background: rgba(255,255,255,0.2);
+    background: rgba(var(--text-rgb), 0.15);
 }
 
 .icon-btn.active {

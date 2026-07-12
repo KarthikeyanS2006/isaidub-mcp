@@ -11,6 +11,8 @@ let allMovies = [];
 let reduceMotion = false;
 
 const splashScreen = document.getElementById('splashScreen');
+const splashStatus = document.getElementById('splashStatus');
+const splashProgress = document.getElementById('splashProgress');
 const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
 const moviesSection = document.getElementById('moviesSection');
@@ -241,17 +243,19 @@ window.addEventListener('load', () => {
     applyTheme(savedTheme);
     
     checkApiStatus();
-    hideSplash();
 });
 
-// Hide splash screen immediately
+// Hide splash screen
 function hideSplash() {
     if (splashScreen && !splashScreen.classList.contains('hidden')) {
-        splashScreen.style.opacity = '0';
-        splashScreen.style.visibility = 'hidden';
-        setTimeout(() => {
-            splashScreen.style.display = 'none';
-        }, 300);
+        splashScreen.classList.add('hidden');
+    }
+}
+
+function setSplashStatus(text, progress) {
+    if (splashStatus) splashStatus.textContent = text;
+    if (splashProgress && typeof progress === 'number') {
+        splashProgress.style.width = Math.min(progress, 100) + '%';
     }
 }
 
@@ -304,19 +308,23 @@ let searchSuggestionsData = [];
 async function fetchMovies() {
     showLoading(true);
     displayedMovies = 0;
-    hideSplash();
+    setSplashStatus('Connecting...', 5);
     
     try {
         const source = currentSource;
         const url = `${API_BASE}/api/${source}/movies?category=${currentCategory}`;
+        setSplashStatus('Fetching movies...', 20);
         const response = await fetch(url);
+        setSplashStatus('Processing movies...', 70);
         const data = await response.json();
         const movies = Array.isArray(data) ? data : [];
         
         if (movies.length === 0) {
             moviesSection.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:50px;">No movies found</p>';
+            hideSplash();
         } else {
             allMovies = movies;
+            setSplashStatus('Building layout...', 85);
             heroMovies = movies.slice(0, 5);
             createHeroIndicators();
             updateHeroSection(heroMovies[0]);
@@ -325,13 +333,15 @@ async function fetchMovies() {
             createMovieRows(movies.slice(0, INITIAL_LOAD));
             displayedMovies = INITIAL_LOAD;
             
-            // Observe images for lazy loading
+            setSplashStatus('Ready!', 100);
             setTimeout(observeImages, 100);
+            setTimeout(hideSplash, 300);
         }
         
         renderMyList();
     } catch (error) {
         moviesSection.innerHTML = `<p style="text-align:center;color:var(--primary);padding:50px;">Error: ${error.message}</p>`;
+        hideSplash();
     } finally {
         showLoading(false);
     }
@@ -655,9 +665,7 @@ async function searchMovies(query, isSuggestion = false) {
     const cacheKey = `${currentSource}:${query.toLowerCase()}`;
     if (searchCache.has(cacheKey)) {
         const cached = searchCache.get(cacheKey);
-        if (!isSuggestion) {
-            displaySearchResults(cached, query);
-        }
+        displaySearchResults(cached, query);
         return;
     }
     
@@ -684,13 +692,9 @@ async function searchMovies(query, isSuggestion = false) {
             searchCache.delete(firstKey);
         }
         
-        if (!isSuggestion) {
-            displaySearchResults(results, query);
-        }
+        displaySearchResults(results, query);
     } catch (error) {
-        if (!isSuggestion) {
-            moviesSection.innerHTML = `<p style="text-align:center;color:#b3b3b3;padding:50px;">Search error: ${error.message}</p>`;
-        }
+        moviesSection.innerHTML = `<p style="text-align:center;color:var(--text-muted);padding:50px;">Search error: ${error.message}</p>`;
     }
     
     closeMobileMenu();
@@ -699,9 +703,9 @@ async function searchMovies(query, isSuggestion = false) {
 function displaySearchResults(results, query) {
     if (results.length === 0) {
         const sourceHint = currentSource === 'isaidub' 
-            ? '<br><small style="color:#ff6b00;">Tip: Try switching to "Tamil Movies" tab for Tamil movies</small>' 
-            : '<br><small style="color:#ff6b00;">Tip: Try switching to "Tamil Dubbed" tab for dubbed movies</small>';
-        moviesSection.innerHTML = `<p style="text-align:center;color:#b3b3b3;padding:50px;">No movies found for "${query}"${sourceHint}</p>`;
+            ? '<br><small style="color:var(--primary);">Tip: Try switching to "Tamil Movies" tab for Tamil movies</small>' 
+            : '<br><small style="color:var(--primary);">Tip: Try switching to "Tamil Dubbed" tab for dubbed movies</small>';
+        moviesSection.innerHTML = `<p style="text-align:center;color:var(--text-muted);padding:50px;">No movies found for "${query}"${sourceHint}</p>`;
     } else {
         const seen = new Set();
         const uniqueResults = results.filter(m => {
@@ -826,33 +830,40 @@ async function fetchMovieDetails(url) {
         modalPlayTrailer.onclick = () => playTrailer(encodeURIComponent(currentMovieTitle + ' movie trailer'));
         
         if (currentSource === 'isaidub') {
-            renderISAIDUBQualities(url);
+            renderISAIDUBQualities(details.qualities || []);
         } else {
             renderMoviesdaQualities(details.qualities || []);
         }
         
     } catch (error) {
         console.error('Error fetching details:', error);
-        qualityOptions.innerHTML = '<p style="color:#b3b3b3;">Error loading details</p>';
+        qualityOptions.innerHTML = '<p style="color:var(--text-muted);">Error loading details</p>';
     }
 }
 
-function renderISAIDUBQualities(movieUrl) {
-    qualityOptions.innerHTML = `
-        <button class="quality-btn" data-quality="480p">480p</button>
-        <button class="quality-btn selected" data-quality="720p">720p</button>
-        <button class="quality-btn" data-quality="1080p">1080p</button>
-    `;
+function renderISAIDUBQualities(qualities) {
+    if (!qualities || qualities.length === 0) {
+        qualityOptions.innerHTML = '<p style="color:var(--text-muted);">No qualities found</p>';
+        downloadLinks.innerHTML = '<p class="error-msg">This movie may not have download links available yet</p>';
+        loadingLinks.style.display = 'none';
+        return;
+    }
+    
+    qualityOptions.innerHTML = qualities.map((q, i) => 
+        `<button class="quality-btn ${i === 0 ? 'selected' : ''}" data-url="${q.url}">${q.quality}</button>`
+    ).join('');
     
     qualityOptions.querySelectorAll('.quality-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             qualityOptions.querySelectorAll('.quality-btn').forEach(b => b.classList.remove('selected'));
             btn.classList.add('selected');
-            fetchISAIDUBDownloadLinks(movieUrl, btn.dataset.quality);
+            fetchISAIDUBDownloadLinks(btn.dataset.url);
         });
     });
     
-    fetchISAIDUBDownloadLinks(movieUrl, '720p');
+    if (qualities[0] && qualities[0].url) {
+        fetchISAIDUBDownloadLinks(qualities[0].url);
+    }
 }
 
 function renderMoviesdaQualities(qualities) {
@@ -891,7 +902,7 @@ function updateProgress(percent, status) {
     if (progressStatus) progressStatus.textContent = status;
 }
 
-async function fetchISAIDUBDownloadLinks(url, quality) {
+async function fetchISAIDUBDownloadLinks(url) {
     loadingLinks.style.display = 'flex';
     downloadLinks.innerHTML = '';
     fileInfo.style.display = 'none';
@@ -961,7 +972,15 @@ async function fetchMoviesdaDownloadLinks(url) {
         if (data.download && data.download.length > 0) {
             html += '<h4 style="color:var(--primary);margin:15px 0 10px;">Download Links</h4>';
             for (const link of data.download) {
-                const downloadUrl = link.mp4Url || link.url;
+                updateProgress(70, 'Getting MP4 URL...');
+                let downloadUrl = link.url;
+                
+                try {
+                    const mp4Response = await fetch(`${API_BASE}/api/moviesda/mp4?url=${encodeURIComponent(link.url)}`);
+                    const mp4Data = await mp4Response.json();
+                    if (mp4Data.mp4Url) downloadUrl = mp4Data.mp4Url;
+                } catch (e) {}
+                
                 html += `<a href="${downloadUrl}" download="${link.server}.mp4" target="_blank" class="download-btn">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                     ${link.server}

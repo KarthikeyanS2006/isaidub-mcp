@@ -30,6 +30,9 @@ const axiosConfig = {
 const cache = new Map();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
+const searchCache = new Map();
+const SEARCH_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
 function getCached(key) {
   const entry = cache.get(key);
   if (entry && Date.now() - entry.timestamp < CACHE_TTL) {
@@ -253,69 +256,93 @@ app.get('/api/isaidub/movies', async (req, res) => {
   res.json(movies);
 });
 
-app.get('/api/isaidub/search', async (req, res) => {
+app.get('/api/search', async (req, res) => {
   const { q } = req.query;
-  
-  if (!q) {
-    return res.status(400).json({ error: "Query parameter 'q' is required" });
-  }
-  
-  const searchTerm = q.toLowerCase().trim();
-  const results = [];
-  const seenLinks = new Set();
-  
-  try {
-    for (const year of ['2026', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018']) {
-      let totalPages = 5;
-      
-      for (let page = 1; page <= totalPages; page++) {
-        if (results.length >= 50) break;
-        
-        try {
-          const pageUrl = page === 1 
-            ? `${SOURCES.isaidub}/tamil-${year}-dubbed-movies/`
-            : `${SOURCES.isaidub}/tamil-${year}-dubbed-movies/?get-page=${page}`;
-          const yearData = await axios.get(pageUrl, axiosConfig);
-          const $year = cheerio.load(yearData.data);
-          
-          if (page === 1) {
-            const foundPages = getTotalPages($year);
-            if (foundPages > 0) totalPages = Math.min(foundPages, 5);
-          }
-          
-          $year(".folder a, .f a").each((_, el) => {
-            const href = $year(el).attr("href");
-            const title = $year(el).text().replace("[+]", "").trim();
-            
-            if (href && (href.includes("/movie/") || href.includes("-movie-")) && title && title.toLowerCase().includes(searchTerm) && !seenLinks.has(href)) {
-              seenLinks.add(href);
-              const titleLower = title.toLowerCase();
-              let score = 0;
-              if (titleLower.startsWith(searchTerm)) score = 3;
-              else if (titleLower.includes(searchTerm)) score = 2;
-              else score = 1;
-              
-              results.push({
-                title,
-                link: href.startsWith("http") ? href : SOURCES.isaidub + href,
-                thumbnail: generateISAIDUBThumbnail(title),
-                source: 'isaidub',
-                score
-              });
-            }
-          });
-        } catch (e) {}
-      }
-      
-      if (results.length >= 50) break;
-    }
-    
-    results.sort((a, b) => b.score - a.score);
+  if (!q) return res.status(400).json({ error: "Query parameter 'q' is required" });
 
-    res.json(results.slice(0, 50));
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  const searchTerm = q.toLowerCase().trim();
+  const cacheKey = `search:${searchTerm}`;
+  const cached = searchCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < SEARCH_CACHE_TTL) {
+    return res.json(cached.data);
   }
+
+  const shortConfig = { ...axiosConfig, timeout: 4000 };
+  const years = ['2026', '2025', '2024', '2023', '2022'];
+  const allResults = [];
+  const seenLinks = new Set();
+
+  function scrapePage($, source, prefix, year) {
+    const selector = source === 'isaidub' ? ".folder a, .f a" : ".folder a, .f a, div.f a";
+    $(selector).each((_, el) => {
+      const href = $(el).attr("href");
+      const title = $(el).text().replace("[+]", "").trim();
+      if (!href || !title) return;
+      if (title.match(/^(Download|Tamil|Home|Contact|Check)/i)) return;
+      if (!title.toLowerCase().includes(searchTerm) || seenLinks.has(href)) return;
+      seenLinks.add(href);
+      const titleLower = title.toLowerCase();
+      let score = 0;
+      if (titleLower === searchTerm) score = 5;
+      else if (titleLower.startsWith(searchTerm)) score = 4;
+      else if (titleLower.includes(searchTerm)) score = 3;
+      else score = 1;
+      score += parseInt(year) / 1000;
+      const fullLink = href.startsWith("http") ? href : prefix + href;
+      const nameForUrl = title.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '-');
+      const thumb = source === 'isaidub'
+        ? generateISAIDUBThumbnail(title)
+        : `${prefix}/uploads/posters/${nameForUrl}.jpg`;
+      allResults.push({ title, link: fullLink, thumbnail: thumb, source, score, year });
+    });
+  }
+
+  try {
+    const isaidubPages = years.map(y => `${SOURCES.isaidub}/tamil-${y}-dubbed-movies/`);
+    const moviesdaPages = years.map(y => `${SOURCES.moviesda}/tamil-${y}-movies/`);
+    const extraPages = ['2026', '2025', '2024'].flatMap(y => [
+      `${SOURCES.isaidub}/tamil-${y}-dubbed-movies/?get-page=2`,
+      `${SOURCES.moviesda}/tamil-${y}-movies/?page=2`
+    ]);
+    const allUrls = [...isaidubPages, ...moviesdaPages, ...extraPages];
+
+    const htmls = await Promise.allSettled(allUrls.map(url =>
+      axios.get(url, shortConfig).then(r => ({ url, html: r.data })).catch(() => null)
+    ));
+
+    for (const r of htmls) {
+      if (r.status !== 'fulfilled' || !r.value) continue;
+      const { url, html } = r.value;
+      const $ = cheerio.load(html);
+      const isIsaidub = url.includes('isaidub');
+      const source = isIsaidub ? 'isaidub' : 'moviesda';
+      const prefix = isIsaidub ? SOURCES.isaidub : SOURCES.moviesda;
+      const yearMatch = url.match(/tamil-(\d{4})/);
+      const year = yearMatch ? yearMatch[1] : '2026';
+      scrapePage($, source, prefix, year);
+    }
+
+    allResults.sort((a, b) => b.score - a.score);
+    const final = allResults.slice(0, 30);
+
+    searchCache.set(cacheKey, { data: final, timestamp: Date.now() });
+    if (searchCache.size > 100) {
+      const oldest = searchCache.keys().next().value;
+      searchCache.delete(oldest);
+    }
+
+    res.json(final);
+  } catch (error) {
+    res.json([]);
+  }
+});
+
+app.get('/api/isaidub/search', async (req, res) => {
+  res.redirect(301, `/api/search?q=${req.query.q || ''}`);
+});
+
+app.get('/api/moviesda/search', async (req, res) => {
+  res.redirect(301, `/api/search?q=${req.query.q || ''}`);
 });
 
 app.get('/api/isaidub/details', async (req, res) => {
@@ -556,76 +583,7 @@ app.get('/api/moviesda/movies', async (req, res) => {
 });
 
 app.get('/api/moviesda/search', async (req, res) => {
-  const { q } = req.query;
-  
-  if (!q) {
-    return res.status(400).json({ error: "Query parameter 'q' is required" });
-  }
-  
-  const searchTerm = q.toLowerCase().trim();
-  const results = [];
-  const seenLinks = new Set();
-  
-  try {
-    for (const year of ['2026', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017']) {
-      let totalPages = 5;
-      
-      for (let page = 1; page <= totalPages; page++) {
-        if (results.length >= 50) break;
-        
-        try {
-          const pageUrl = page === 1 
-            ? `${SOURCES.moviesda}/tamil-${year}-movies/`
-            : `${SOURCES.moviesda}/tamil-${year}-movies/?page=${page}`;
-          const yearData = await axios.get(pageUrl, axiosConfig);
-          const $year = cheerio.load(yearData.data);
-          
-          if (page === 1) {
-            const foundPages = getTotalPages($year);
-            if (foundPages > 0) totalPages = Math.min(foundPages, 5);
-          }
-          
-          $year(".folder a, .f a, div.f a").each((_, el) => {
-            const href = $year(el).attr("href");
-            const title = $year(el).text().replace("[+]", "").trim();
-            
-            if (href && title && title.toLowerCase().includes(searchTerm) && !seenLinks.has(href)) {
-              seenLinks.add(href);
-              const yearMatch = title.match(/\((\d{4})\)/);
-              const movieYear = yearMatch ? yearMatch[1] : year;
-              const nameForUrl = title.toLowerCase()
-                .replace(/[^a-z0-9\s]/g, '')
-                .replace(/\s+/g, '-');
-              
-              const titleLower = title.toLowerCase();
-              let score = 0;
-              if (titleLower.startsWith(searchTerm)) score = 3;
-              else if (titleLower.includes(searchTerm)) score = 2;
-              else score = 1;
-              
-              results.push({
-                title,
-                link: href.startsWith("http") ? href : SOURCES.moviesda + href,
-                thumbnail: `${SOURCES.moviesda}/uploads/posters/${nameForUrl}.jpg`,
-                year: movieYear,
-                source: 'moviesda',
-                score
-              });
-            }
-          });
-        } catch (e) {}
-      }
-      
-      if (results.length >= 50) break;
-    }
-    
-    results.sort((a, b) => b.score - a.score);
-
-    res.json(results.slice(0, 50));
-  } catch (error) {
-    console.log(`Outer error: ${error.message}`);
-    res.json([]);
-  }
+  res.redirect(301, `/api/search?q=${req.query.q || ''}`);
 });
 
 app.get('/api/moviesda/details', async (req, res) => {
@@ -807,6 +765,11 @@ app.get('/api/moviesda/mp4', async (req, res) => {
   }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Vercel exports the app; local uses app.listen
+export default app;
+
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Server running at http://localhost:${PORT}`);
+  });
+}

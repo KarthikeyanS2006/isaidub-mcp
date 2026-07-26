@@ -3,3 +3,11 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+test_*.json
+test_*.html
+temp_*.json
+server_out.txt
+server_err.txt
+server.log
+nul
+check_json*.py

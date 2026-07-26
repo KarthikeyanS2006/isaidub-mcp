@@ -14,7 +14,9 @@ const splashScreen = document.getElementById('splashScreen');
 const splashStatus = document.getElementById('splashStatus');
 const splashProgress = document.getElementById('splashProgress');
 const searchInput = document.getElementById('searchInput');
-const searchBtn = document.getElementById('searchBtn');
+const searchClear = document.getElementById('searchClear');
+const searchSpinner = document.getElementById('searchSpinner');
+const searchResults = document.getElementById('searchResults');
 const moviesSection = document.getElementById('moviesSection');
 const loading = document.getElementById('loading');
 const modal = document.getElementById('movieModal');
@@ -52,6 +54,13 @@ const trailerClose = document.getElementById('trailerClose');
 const hamburger = document.getElementById('hamburger');
 const mobileMenu = document.getElementById('mobileMenu');
 const mobileSearchInput = document.getElementById('mobileSearchInput');
+const mobileSearchToggle = document.getElementById('mobileSearchToggle');
+const mobileSearchOverlay = document.getElementById('mobileSearchOverlay');
+const mobileLiveSearchInput = document.getElementById('mobileLiveSearchInput');
+const mobileSearchSpinner = document.getElementById('mobileSearchSpinner');
+const mobileSearchClear = document.getElementById('mobileSearchClear');
+const mobileSearchClose = document.getElementById('mobileSearchClose');
+const mobileSearchResults = document.getElementById('mobileSearchResults');
 const modalPlayTrailer = document.getElementById('modalPlayTrailer');
 const previewModal = document.getElementById('previewModal');
 const previewClose = document.getElementById('previewClose');
@@ -60,7 +69,6 @@ const previewDesc = document.getElementById('previewDesc');
 const previewAddList = document.getElementById('previewAddList');
 const previewPlay = document.getElementById('previewPlay');
 const previewThumb = document.getElementById('previewThumb');
-const searchSuggestions = document.getElementById('searchSuggestions');
 const myListSection = document.getElementById('myListSection');
 const myListGrid = document.getElementById('myListGrid');
 const reduceMotionBtn = document.getElementById('reduceMotionBtn');
@@ -243,6 +251,9 @@ window.addEventListener('load', () => {
     applyTheme(savedTheme);
     
     checkApiStatus();
+    
+    // Safety: always hide splash after 5 seconds no matter what
+    setTimeout(hideSplash, 5000);
 });
 
 // Hide splash screen
@@ -303,7 +314,6 @@ const LOAD_MORE_COUNT = 50;
 let searchTimeout = null;
 let searchCache = new Map();
 const SEARCH_CACHE_MAX = 50;
-let searchSuggestionsData = [];
 
 async function fetchMovies() {
     showLoading(true);
@@ -314,7 +324,10 @@ async function fetchMovies() {
         const source = currentSource;
         const url = `${API_BASE}/api/${source}/movies?category=${currentCategory}`;
         setSplashStatus('Fetching movies...', 20);
-        const response = await fetch(url);
+        const controller = new AbortController();
+        const fetchTimeout = setTimeout(() => controller.abort(), 8000);
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(fetchTimeout);
         setSplashStatus('Processing movies...', 70);
         const data = await response.json();
         const movies = Array.isArray(data) ? data : [];
@@ -659,70 +672,110 @@ function closeTrailerModal() {
     trailerModal.classList.remove('active');
 }
 
-async function searchMovies(query, isSuggestion = false) {
-    if (!query.trim()) return;
-    
-    const cacheKey = `${currentSource}:${query.toLowerCase()}`;
-    if (searchCache.has(cacheKey)) {
-        const cached = searchCache.get(cacheKey);
-        displaySearchResults(cached, query);
+let searchAbortController = null;
+
+async function searchMovies(query) {
+    if (!query.trim()) {
+        closeSearchDropdown();
         return;
     }
     
-    searchSuggestions.style.display = 'none';
-    moviesSection.style.display = 'block';
-    myListSection.style.display = 'none';
+    if (searchAbortController) searchAbortController.abort();
+    searchAbortController = new AbortController();
+    const signal = searchAbortController.signal;
     
-    if (!isSuggestion) {
-        moviesSection.innerHTML = `
-            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:50vh;gap:20px;">
-                <div class="loader" style="width:60px;height:60px;border:4px solid var(--bg-lighter);border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite;"></div>
-                <p style="color:var(--text-muted);">Searching for "${query}"...</p>
-            </div>
-        `;
-    }
+    showSearchLoading(query);
     
     try {
-        const response = await fetch(`${API_BASE}/api/${currentSource}/search?q=${encodeURIComponent(query)}`);
-        const results = await response.json();
-        
-        searchCache.set(cacheKey, results);
-        if (searchCache.size > SEARCH_CACHE_MAX) {
-            const firstKey = searchCache.keys().next().value;
-            searchCache.delete(firstKey);
+        const cacheKey = query.toLowerCase();
+        let results;
+        if (searchCache.has(cacheKey)) {
+            results = searchCache.get(cacheKey);
+        } else {
+            const resp = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(query)}`, { signal });
+            results = await resp.json();
+            searchCache.set(cacheKey, results);
+            if (searchCache.size > SEARCH_CACHE_MAX) {
+                const firstKey = searchCache.keys().next().value;
+                searchCache.delete(firstKey);
+            }
         }
         
-        displaySearchResults(results, query);
+        if (!signal.aborted) {
+            displaySearchDropdown(results, query);
+        }
     } catch (error) {
-        moviesSection.innerHTML = `<p style="text-align:center;color:var(--text-muted);padding:50px;">Search error: ${error.message}</p>`;
+        if (error.name !== 'AbortError') {
+            searchResults.innerHTML = `<div class="search-results-empty">Search failed</div>`;
+            openSearchDropdown();
+        }
     }
     
     closeMobileMenu();
 }
 
-function displaySearchResults(results, query) {
+function showSearchLoading(query) {
+    searchResults.innerHTML = `
+        <div class="search-results-loading">
+            <div class="search-inline-spinner"></div>
+            <span>Searching "${query}"...</span>
+        </div>
+    `;
+    openSearchDropdown();
+}
+
+function displaySearchDropdown(results, query) {
     if (results.length === 0) {
-        const sourceHint = currentSource === 'isaidub' 
-            ? '<br><small style="color:var(--primary);">Tip: Try switching to "Tamil Movies" tab for Tamil movies</small>' 
-            : '<br><small style="color:var(--primary);">Tip: Try switching to "Tamil Dubbed" tab for dubbed movies</small>';
-        moviesSection.innerHTML = `<p style="text-align:center;color:var(--text-muted);padding:50px;">No movies found for "${query}"${sourceHint}</p>`;
-    } else {
-        const seen = new Set();
-        const uniqueResults = results.filter(m => {
-            if (seen.has(m.link)) return false;
-            seen.add(m.link);
-            return true;
-        });
-        
-        allMovies = uniqueResults;
-        heroMovies = uniqueResults.slice(0, 5);
-        createHeroIndicators();
-        if (heroMovies.length > 0) {
-            updateHeroSection(heroMovies[0]);
-        }
-        
-        createMovieRows(uniqueResults);
+        searchResults.innerHTML = `<div class="search-results-empty">No results for "${escapeHtml(query)}"</div>`;
+        openSearchDropdown();
+        return;
     }
+    
+    const seen = new Set();
+    const unique = results.filter(m => {
+        if (seen.has(m.link)) return false;
+        seen.add(m.link);
+        return true;
+    }).slice(0, 15);
+    
+    searchResults.innerHTML = unique.map((movie, i) => `
+        <div class="search-result-item" data-index="${i}" data-title="${escapeHtml(movie.title)}" data-link="${movie.link}" data-source="${movie.source}">
+            ${movie.thumbnail
+                ? `<img src="${movie.thumbnail}" alt="" loading="lazy" onerror="this.style.display='none'">`
+                : '<div style="width:36px;height:52px;background:var(--dark-lighter);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;">🎬</div>'}
+            <div class="result-info">
+                <div class="result-title">${escapeHtml(movie.title)}</div>
+                <div class="result-source">${movie.source === 'isaidub' ? 'Tamil Dubbed' : 'Tamil Movies'}${movie.year ? ' · ' + movie.year : ''}</div>
+            </div>
+        </div>
+    `).join('');
+    
+    searchResults.querySelectorAll('.search-result-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const title = item.dataset.title;
+            searchInput.value = title;
+            searchClear.classList.add('active');
+            closeSearchDropdown();
+            const movie = { link: item.dataset.link, source: item.dataset.source, title };
+            openModal(movie);
+        });
+    });
+    
+    openSearchDropdown();
+}
+
+function openSearchDropdown() {
+    searchResults.classList.add('open');
+}
+
+function closeSearchDropdown() {
+    searchResults.classList.remove('open');
+    searchActiveIndex = -1;
+    clearActiveResult();
+}
+
+function clearActiveResult() {
+    searchResults.querySelectorAll('.search-result-item.active').forEach(el => el.classList.remove('active'));
 }
 
 function createMovieCard(movie, showRemove = false) {
@@ -1069,122 +1122,266 @@ function closeMobileMenu() {
     mobileMenu.classList.remove('active');
 }
 
-if (searchBtn) {
-    searchBtn.addEventListener('click', () => {
-        const query = searchInput ? searchInput.value.trim() : '';
-        if (query) {
-            searchMovies(query);
-        }
-    });
-}
+// --- Real-time Search ---
+let searchActiveIndex = -1;
 
-const searchContainer = document.querySelector('.search-container');
-if (searchContainer) {
-    searchContainer.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const query = searchInput ? searchInput.value.trim() : '';
-        if (query) {
-            searchMovies(query);
-        }
-    });
+function setSearchSpinner(active) {
+    if (searchSpinner) searchSpinner.classList.toggle('active', active);
+    if (searchClear) searchClear.classList.toggle('active', searchInput && searchInput.value.length > 0);
 }
 
 if (searchInput) {
     searchInput.addEventListener('input', () => {
         const query = searchInput.value.trim();
         
+        // Toggle clear button
+        searchClear.classList.toggle('active', query.length > 0);
+        
         if (searchTimeout) clearTimeout(searchTimeout);
         
         if (query.length >= 2) {
-            searchTimeout = setTimeout(async () => {
-                await fetchSearchSuggestions(query);
-            }, 150);
+            setSearchSpinner(true);
+            searchTimeout = setTimeout(() => {
+                searchMovies(query);
+                setSearchSpinner(false);
+            }, 300);
         } else {
-            searchSuggestions.innerHTML = '';
-            searchSuggestions.style.display = 'none';
+            closeSearchDropdown();
+            setSearchSpinner(false);
         }
     });
     
     searchInput.addEventListener('focus', () => {
         const query = searchInput.value.trim();
-        if (query.length >= 2 && searchSuggestionsData.length > 0) {
-            searchSuggestions.style.display = 'block';
+        if (query.length >= 2 && searchResults.innerHTML.trim()) {
+            openSearchDropdown();
         }
-    });
-    
-    searchInput.addEventListener('blur', () => {
-        setTimeout(() => searchSuggestions.style.display = 'none', 200);
     });
     
     searchInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
+        const items = searchResults.querySelectorAll('.search-result-item');
+        
+        if (e.key === 'ArrowDown') {
             e.preventDefault();
-            if (searchTimeout) clearTimeout(searchTimeout);
-            const query = searchInput.value.trim();
-            if (query) {
-                searchMovies(query);
+            if (!searchResults.classList.contains('open') && searchInput.value.trim().length >= 2) {
+                searchMovies(searchInput.value.trim());
+                return;
             }
+            clearActiveResult();
+            searchActiveIndex = Math.min(searchActiveIndex + 1, items.length - 1);
+            items[searchActiveIndex]?.classList.add('active');
+            items[searchActiveIndex]?.scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            clearActiveResult();
+            searchActiveIndex = Math.max(searchActiveIndex - 1, 0);
+            items[searchActiveIndex]?.classList.add('active');
+            items[searchActiveIndex]?.scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (searchActiveIndex >= 0 && items[searchActiveIndex]) {
+                items[searchActiveIndex].click();
+            } else {
+                if (searchTimeout) clearTimeout(searchTimeout);
+                const query = searchInput.value.trim();
+                if (query) {
+                    setSearchSpinner(true);
+                    searchMovies(query).then(() => setSearchSpinner(false));
+                }
+            }
+        } else if (e.key === 'Escape') {
+            closeSearchDropdown();
+            searchInput.blur();
         }
     });
 }
 
-async function fetchSearchSuggestions(query) {
-    const cacheKey = `${currentSource}:${query.toLowerCase()}`;
-    
-    if (searchCache.has(cacheKey)) {
-        const results = searchCache.get(cacheKey);
-        searchSuggestionsData = results.slice(0, 8);
-        showSearchSuggestions();
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API_BASE}/api/${currentSource}/search?q=${encodeURIComponent(query)}`);
-        const results = await response.json();
-        
-        searchCache.set(cacheKey, results);
-        searchSuggestionsData = results.slice(0, 8);
-        showSearchSuggestions();
-    } catch (error) {
-        searchSuggestions.style.display = 'none';
-    }
-}
-
-function showSearchSuggestions() {
-    if (searchSuggestionsData.length > 0) {
-        searchSuggestions.innerHTML = searchSuggestionsData.map(movie => `
-            <div class="suggestion-item" data-title="${escapeHtml(movie.title)}" data-link="${movie.link}">
-                <img src="${movie.thumbnail || ''}" alt="" onerror="this.style.display='none'" loading="lazy">
-                <span>${escapeHtml(movie.title)}</span>
-                <small>${movie.source === 'isaidub' ? 'Tamil Dubbed' : 'Tamil'}</small>
-            </div>
-        `).join('');
-        
-        searchSuggestions.querySelectorAll('.suggestion-item').forEach(item => {
-            item.addEventListener('click', () => {
-                const title = item.dataset.title;
-                searchInput.value = title;
-                searchMovies(title, true);
-            });
-        });
-        
-        searchSuggestions.style.display = 'block';
-    } else {
-        searchSuggestions.style.display = 'none';
-    }
-}
-
-document.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', () => {
-        const query = chip.dataset.query;
-        if (searchInput) searchInput.value = query;
-        searchMovies(query);
+if (searchClear) {
+    searchClear.addEventListener('click', () => {
+        searchInput.value = '';
+        searchClear.classList.remove('active');
+        closeSearchDropdown();
+        searchInput.focus();
     });
+}
+
+// Close dropdown on outside click
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.search-wrapper')) {
+        closeSearchDropdown();
+    }
 });
 
 if (hamburger) {
     hamburger.addEventListener('click', toggleMobileMenu);
 }
+
+// --- Mobile Search Overlay ---
+let mobileSearchActiveIndex = -1;
+
+function openMobileSearch() {
+    mobileSearchOverlay.classList.add('active');
+    closeMobileMenu();
+    setTimeout(() => mobileLiveSearchInput?.focus(), 300);
+}
+
+function closeMobileSearch() {
+    mobileSearchOverlay.classList.remove('active');
+    if (mobileLiveSearchInput) mobileLiveSearchInput.value = '';
+    if (mobileSearchClear) mobileSearchClear.classList.remove('active');
+    if (mobileSearchResults) {
+        mobileSearchResults.classList.remove('open');
+        mobileSearchResults.innerHTML = '';
+    }
+    mobileSearchActiveIndex = -1;
+}
+
+function setMobileSearchSpinner(active) {
+    if (mobileSearchSpinner) mobileSearchSpinner.classList.toggle('active', active);
+    if (mobileSearchClear) mobileSearchClear.classList.toggle('active', mobileLiveSearchInput && mobileLiveSearchInput.value.length > 0);
+}
+
+if (mobileSearchToggle) {
+    mobileSearchToggle.addEventListener('click', openMobileSearch);
+}
+
+if (mobileSearchClose) {
+    mobileSearchClose.addEventListener('click', closeMobileSearch);
+}
+
+if (mobileLiveSearchInput) {
+    let mobileSearchTimeout;
+
+    mobileLiveSearchInput.addEventListener('input', () => {
+        const query = mobileLiveSearchInput.value.trim();
+        mobileSearchClear.classList.toggle('active', query.length > 0);
+        
+        if (mobileSearchTimeout) clearTimeout(mobileSearchTimeout);
+        
+        if (query.length >= 2) {
+            setMobileSearchSpinner(true);
+            mobileSearchTimeout = setTimeout(() => {
+                searchMoviesMobile(query);
+                setMobileSearchSpinner(false);
+            }, 300);
+        } else {
+            mobileSearchResults.classList.remove('open');
+            mobileSearchResults.innerHTML = '';
+            setMobileSearchSpinner(false);
+        }
+    });
+
+    mobileLiveSearchInput.addEventListener('keydown', (e) => {
+        const items = mobileSearchResults.querySelectorAll('.search-result-item');
+        
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            mobileSearchActiveIndex = Math.min(mobileSearchActiveIndex + 1, items.length - 1);
+            items.forEach((it, i) => it.classList.toggle('active', i === mobileSearchActiveIndex));
+            items[mobileSearchActiveIndex]?.scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            mobileSearchActiveIndex = Math.max(mobileSearchActiveIndex - 1, 0);
+            items.forEach((it, i) => it.classList.toggle('active', i === mobileSearchActiveIndex));
+            items[mobileSearchActiveIndex]?.scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (mobileSearchActiveIndex >= 0 && items[mobileSearchActiveIndex]) {
+                items[mobileSearchActiveIndex].click();
+            }
+        } else if (e.key === 'Escape') {
+            closeMobileSearch();
+        }
+    });
+}
+
+if (mobileSearchClear) {
+    mobileSearchClear.addEventListener('click', () => {
+        mobileLiveSearchInput.value = '';
+        mobileSearchClear.classList.remove('active');
+        mobileSearchResults.classList.remove('open');
+        mobileSearchResults.innerHTML = '';
+        mobileLiveSearchInput.focus();
+    });
+}
+
+async function searchMoviesMobile(query) {
+    if (!mobileSearchResults) return;
+    
+    if (searchAbortController) searchAbortController.abort();
+    searchAbortController = new AbortController();
+    const signal = searchAbortController.signal;
+    
+    mobileSearchResults.innerHTML = `
+        <div class="search-results-loading">
+            <div class="search-inline-spinner"></div>
+            Searching...
+        </div>
+    `;
+    mobileSearchResults.classList.add('open');
+    mobileSearchActiveIndex = -1;
+
+    try {
+        const cacheKey = query.toLowerCase();
+        let results;
+        if (searchCache.has(cacheKey)) {
+            results = searchCache.get(cacheKey);
+        } else {
+            const resp = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(query)}`, { signal });
+            results = await resp.json();
+            searchCache.set(cacheKey, results);
+            if (searchCache.size > SEARCH_CACHE_MAX) {
+                const firstKey = searchCache.keys().next().value;
+                searchCache.delete(firstKey);
+            }
+        }
+
+        if (signal.aborted) return;
+
+        if (results.length === 0) {
+            mobileSearchResults.innerHTML = `
+                <div class="search-results-empty">
+                    No results found for "${escapeHtml(query)}"
+                    <small>Try a different search term</small>
+                </div>
+            `;
+            return;
+        }
+
+        mobileSearchResults.innerHTML = results.map((movie, i) => `
+            <div class="search-result-item" data-link="${escapeHtml(movie.link)}" data-source="${movie.source}" data-index="${i}">
+                <img src="${escapeHtml(movie.thumbnail || '')}" alt="" onerror="this.style.display='none'">
+                <div class="result-info">
+                    <div class="result-title">${escapeHtml(movie.title)}</div>
+                    <div class="result-source">${movie.source === 'isaidub' ? 'Tamil Dubbed' : 'Tamil Movies'}${movie.year ? ' · ' + movie.year : ''}</div>
+                </div>
+            </div>
+        `).join('');
+
+        mobileSearchResults.querySelectorAll('.search-result-item').forEach(item => {
+            item.addEventListener('click', () => {
+                closeMobileSearch();
+                const movie = { link: item.dataset.link, source: item.dataset.source, title: item.querySelector('.result-title').textContent };
+                openModal(movie);
+            });
+        });
+    } catch (err) {
+        if (err.name !== 'AbortError') {
+            mobileSearchResults.innerHTML = `
+                <div class="search-results-empty">Search failed. Try again.</div>
+            `;
+        }
+    }
+}
+
+// Close mobile search on outside click
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.mobile-search-overlay') && !e.target.closest('.mobile-search-toggle')) {
+        if (mobileSearchOverlay?.classList.contains('active')) {
+            closeMobileSearch();
+        }
+    }
+});
 
 if (mobileSearchInput) {
     mobileSearchInput.addEventListener('keypress', (e) => {
@@ -1293,6 +1490,8 @@ function goHome() {
     
     if (searchInput) searchInput.value = '';
     if (mobileSearchInput) mobileSearchInput.value = '';
+    if (searchClear) searchClear.classList.remove('active');
+    closeSearchDropdown();
     
     fetchMovies();
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1300,7 +1499,6 @@ function goHome() {
 
 function showMyList() {
     myListSection.style.display = 'block';
-    continueSection.style.display = 'none';
     moviesSection.style.display = 'none';
     renderMyList();
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1427,7 +1625,9 @@ window.addEventListener('scroll', () => {
 
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-        if (trailerModal && trailerModal.classList.contains('active')) {
+        if (searchResults.classList.contains('open')) {
+            closeSearchDropdown();
+        } else if (trailerModal && trailerModal.classList.contains('active')) {
             closeTrailerModal();
         } else if (modal && modal.classList.contains('active')) {
             closeModalHandler();

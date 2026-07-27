@@ -267,13 +267,13 @@ app.get('/api/search', async (req, res) => {
     return res.json(cached.data);
   }
 
-  const shortConfig = { ...axiosConfig, timeout: 4000 };
-  const years = ['2026', '2025', '2024', '2023', '2022'];
+  const shortConfig = { ...axiosConfig, timeout: 10000 };
+  const years = ['2026','2025','2024','2023','2022','2021','2020','2019','2018','2017','2016','2015'];
   const allResults = [];
   const seenLinks = new Set();
 
   function scrapePage($, source, prefix, year) {
-    const selector = source === 'isaidub' ? ".folder a, .f a" : ".folder a, .f a, div.f a";
+    const selector = ".folder a, .f a, div.f a";
     $(selector).each((_, el) => {
       const href = $(el).attr("href");
       const title = $(el).text().replace("[+]", "").trim();
@@ -297,29 +297,63 @@ app.get('/api/search', async (req, res) => {
     });
   }
 
+  async function fetchWithRetry(url, retries = 1) {
+    try {
+      const r = await axios.get(url, shortConfig);
+      return { url, html: r.data };
+    } catch (err) {
+      if (retries > 0) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        return fetchWithRetry(url, retries - 1);
+      }
+      return null;
+    }
+  }
+
+  async function fetchInBatches(urls, batchSize = 10) {
+    const results = [];
+    for (let i = 0; i < urls.length; i += batchSize) {
+      const batch = urls.slice(i, i + batchSize);
+      const batchResults = await Promise.allSettled(batch.map(url => fetchWithRetry(url)));
+      results.push(...batchResults);
+    }
+    return results;
+  }
+
   try {
-    const isaidubPages = years.map(y => `${SOURCES.isaidub}/tamil-${y}-dubbed-movies/`);
-    const moviesdaPages = years.map(y => `${SOURCES.moviesda}/tamil-${y}-movies/`);
-    const extraPages = ['2026', '2025', '2024'].flatMap(y => [
-      `${SOURCES.isaidub}/tamil-${y}-dubbed-movies/?get-page=2`,
-      `${SOURCES.moviesda}/tamil-${y}-movies/?page=2`
-    ]);
-    const allUrls = [...isaidubPages, ...moviesdaPages, ...extraPages];
+    const isaidubBase = years.map(y => ({ year: y, source: 'isaidub', base: `${SOURCES.isaidub}/tamil-${y}-dubbed-movies/`, prefix: SOURCES.isaidub }));
+    const moviesdaBase = years.map(y => ({ year: y, source: 'moviesda', base: `${SOURCES.moviesda}/tamil-${y}-movies/`, prefix: SOURCES.moviesda }));
+    const allBaseUrls = [...isaidubBase, ...moviesdaBase];
 
-    const htmls = await Promise.allSettled(allUrls.map(url =>
-      axios.get(url, shortConfig).then(r => ({ url, html: r.data })).catch(() => null)
-    ));
+    const page1Results = await fetchInBatches(allBaseUrls.map(e => e.base));
 
-    for (const r of htmls) {
+    const moreUrls = [];
+    for (let i = 0; i < page1Results.length; i++) {
+      const r = page1Results[i];
+      const info = allBaseUrls[i];
       if (r.status !== 'fulfilled' || !r.value) continue;
-      const { url, html } = r.value;
+      const { html } = r.value;
       const $ = cheerio.load(html);
-      const isIsaidub = url.includes('isaidub');
-      const source = isIsaidub ? 'isaidub' : 'moviesda';
-      const prefix = isIsaidub ? SOURCES.isaidub : SOURCES.moviesda;
-      const yearMatch = url.match(/tamil-(\d{4})/);
-      const year = yearMatch ? yearMatch[1] : '2026';
-      scrapePage($, source, prefix, year);
+      scrapePage($, info.source, info.prefix, info.year);
+      const totalPages = getTotalPages($);
+      const isIsaidub = info.source === 'isaidub';
+      for (let page = 2; page <= totalPages; page++) {
+        const pageUrl = isIsaidub
+          ? `${info.base}?get-page=${page}`
+          : `${info.base}?page=${page}`;
+        moreUrls.push({ url: pageUrl, source: info.source, prefix: info.prefix, year: info.year });
+      }
+    }
+
+    if (moreUrls.length > 0) {
+      const moreResults = await fetchInBatches(moreUrls.map(e => e.url));
+      for (let i = 0; i < moreResults.length; i++) {
+        const r = moreResults[i];
+        if (r.status !== 'fulfilled' || !r.value) continue;
+        const { html } = r.value;
+        const $ = cheerio.load(html);
+        scrapePage($, moreUrls[i].source, moreUrls[i].prefix, moreUrls[i].year);
+      }
     }
 
     allResults.sort((a, b) => b.score - a.score);
@@ -769,7 +803,9 @@ app.get('/api/moviesda/mp4', async (req, res) => {
 export default app;
 
 if (!process.env.VERCEL) {
-  app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running:`);
+    console.log(`  Local:   http://localhost:${PORT}`);
+    console.log(`  Network: http://192.168.1.20:${PORT}`);
   });
 }

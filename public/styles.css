@@ -630,6 +630,7 @@ main, .movies-section {
 
 .source-tabs, .category-tabs {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
 }
 

@@ -4,6 +4,7 @@ let currentCategory = '2026';
 let currentMediaType = 'all';
 let currentMovieUrl = null;
 let currentMovieTitle = null;
+let currentMovieYear = '';
 let heroMovies = [];
 let heroIndex = 0;
 let heroInterval = null;
@@ -75,6 +76,10 @@ const reduceMotionBtn = document.getElementById('reduceMotionBtn');
 const mobileReduceMotionBtn = document.getElementById('mobileReduceMotionBtn');
 const themeToggle = document.getElementById('themeToggle');
 const themeIcon = document.getElementById('themeIcon');
+
+// New Music App Popup
+const appPopupOverlay = document.getElementById('appPopupOverlay');
+const appPopupClose = document.getElementById('appPopupClose');
 
 // LocalStorage Manager
 const Storage = {
@@ -254,6 +259,23 @@ window.addEventListener('load', () => {
     
     // Safety: always hide splash after 5 seconds no matter what
     setTimeout(hideSplash, 5000);
+
+    // Show new music app popup on every visit & reload
+    setTimeout(() => {
+        if (appPopupOverlay && !appPopupOverlay.classList.contains('show')) {
+            appPopupOverlay.classList.add('show');
+        }
+    }, 1500);
+});
+
+appPopupClose?.addEventListener('click', () => {
+    appPopupOverlay?.classList.remove('show');
+});
+
+appPopupOverlay?.addEventListener('click', (e) => {
+    if (e.target === appPopupOverlay) {
+        appPopupOverlay.classList.remove('show');
+    }
 });
 
 // Hide splash screen
@@ -609,7 +631,8 @@ function updateHeroSection(movie) {
     if (!movie) return;
     
     currentMovieTitle = movie.title.replace(/\s*\(\d{4}\)\s*/g, '').trim();
-    const searchQuery = encodeURIComponent(currentMovieTitle + ' movie trailer');
+    const yearMatch = movie.title.match(/\((\d{4})\)/);
+    currentMovieYear = movie.year || (yearMatch ? yearMatch[1] : '');
     
     heroBackdrop.style.backgroundImage = movie.thumbnail 
         ? `url(${movie.thumbnail})` 
@@ -618,7 +641,7 @@ function updateHeroSection(movie) {
     heroTitle.textContent = movie.title;
     heroDescription.textContent = 'Watch and download the latest Tamil dubbed movies in HD quality. Direct download links available.';
     
-    playTrailerBtn.onclick = () => playTrailer(searchQuery);
+    playTrailerBtn.onclick = () => playTrailer(movie);
     moreInfoBtn.onclick = () => openModal(movie);
 }
 
@@ -645,26 +668,13 @@ function resetHeroSlideshow() {
     }
 }
 
-async function playTrailer(query) {
-    try {
-        loading.style.display = 'flex';
-        const response = await fetch(`https://www.youtube.com/results?search_query=${query}`);
-        const text = await response.text();
-        const videoIdMatch = text.match(/"videoId":"([^"]+)"/);
-        
-        loading.style.display = 'none';
-        
-        if (videoIdMatch && videoIdMatch[1]) {
-            trailerFrame.src = `https://www.youtube.com/embed/${videoIdMatch[1]}?autoplay=1`;
-            trailerModal.classList.add('active');
-        } else {
-            alert('Trailer not found. Try searching on YouTube.');
-        }
-    } catch (error) {
-        loading.style.display = 'none';
-        console.error('Trailer search error:', error);
-        alert('Could not find trailer');
-    }
+function playTrailer(movie) {
+    const rawTitle = (movie && movie.title) || currentMovieTitle || '';
+    const title = rawTitle.replace(/\s*\(\d{4}\)\s*/g, '').trim();
+    const yearMatch = rawTitle.match(/\((\d{4})\)/);
+    const year = (movie && movie.year) || (yearMatch ? yearMatch[1] : '') || currentMovieYear;
+    const query = encodeURIComponent([title, year, 'official trailer'].filter(Boolean).join(' '));
+    window.open(`https://www.youtube.com/results?search_query=${query}`, '_blank', 'noopener');
 }
 
 function closeTrailerModal() {
@@ -739,7 +749,7 @@ function displaySearchDropdown(results, query) {
     }).slice(0, 15);
     
     searchResults.innerHTML = unique.map((movie, i) => `
-        <div class="search-result-item" data-index="${i}" data-title="${escapeHtml(movie.title)}" data-link="${movie.link}" data-source="${movie.source}">
+        <div class="search-result-item" data-index="${i}" data-title="${escapeHtml(movie.title)}" data-link="${movie.link}" data-source="${movie.source}" data-year="${movie.year || ''}">
             ${movie.thumbnail
                 ? `<img src="${movie.thumbnail}" alt="" loading="lazy" onerror="this.style.display='none'">`
                 : '<div style="width:36px;height:52px;background:var(--dark-lighter);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;">🎬</div>'}
@@ -756,7 +766,7 @@ function displaySearchDropdown(results, query) {
             searchInput.value = title;
             searchClear.classList.add('active');
             closeSearchDropdown();
-            const movie = { link: item.dataset.link, source: item.dataset.source, title };
+            const movie = { link: item.dataset.link, source: item.dataset.source, title, year: item.dataset.year };
             openModal(movie);
         });
     });
@@ -864,6 +874,8 @@ async function fetchMovieDetails(url) {
         if (details.title) {
             modalTitle.textContent = details.title;
             currentMovieTitle = details.title.replace(/\s*\(\d{4}\)\s*/g, '').trim();
+            const yearMatch = details.title.match(/\((\d{4})\)/);
+            if (yearMatch) currentMovieYear = yearMatch[1];
         }
         
         if (details.thumbnail) {
@@ -879,8 +891,6 @@ async function fetchMovieDetails(url) {
         modalDirector.innerHTML = details.director ? `<strong>Director:</strong> ${details.director}` : '';
         modalStarring.innerHTML = details.starring ? `<strong>Starring:</strong> ${details.starring}` : '';
         modalSynopsis.textContent = details.synopsis || '';
-        
-        modalPlayTrailer.onclick = () => playTrailer(encodeURIComponent(currentMovieTitle + ' movie trailer'));
         
         if (currentSource === 'isaidub') {
             renderISAIDUBQualities(details.qualities || []);
@@ -1069,6 +1079,12 @@ function openModal(movie) {
     currentMovieUrl = movie.link;
     currentSource = movie.source || 'moviesda';
     modalTitle.textContent = movie.title;
+    
+    currentMovieTitle = movie.title.replace(/\s*\(\d{4}\)\s*/g, '').trim();
+    const yearMatch = movie.title.match(/\((\d{4})\)/);
+    currentMovieYear = movie.year || (yearMatch ? yearMatch[1] : '');
+    
+    modalPlayTrailer.onclick = () => playTrailer(movie);
     
     if (movie.thumbnail) {
         modalPoster.style.backgroundImage = `url(${movie.thumbnail})`;
@@ -1349,7 +1365,7 @@ async function searchMoviesMobile(query) {
         }
 
         mobileSearchResults.innerHTML = results.map((movie, i) => `
-            <div class="search-result-item" data-link="${escapeHtml(movie.link)}" data-source="${movie.source}" data-index="${i}">
+            <div class="search-result-item" data-link="${escapeHtml(movie.link)}" data-source="${movie.source}" data-year="${movie.year || ''}" data-index="${i}">
                 <img src="${escapeHtml(movie.thumbnail || '')}" alt="" onerror="this.style.display='none'">
                 <div class="result-info">
                     <div class="result-title">${escapeHtml(movie.title)}</div>
@@ -1361,7 +1377,7 @@ async function searchMoviesMobile(query) {
         mobileSearchResults.querySelectorAll('.search-result-item').forEach(item => {
             item.addEventListener('click', () => {
                 closeMobileSearch();
-                const movie = { link: item.dataset.link, source: item.dataset.source, title: item.querySelector('.result-title').textContent };
+                const movie = { link: item.dataset.link, source: item.dataset.source, title: item.querySelector('.result-title').textContent, year: item.dataset.year };
                 openModal(movie);
             });
         });

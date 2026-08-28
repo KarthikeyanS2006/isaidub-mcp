@@ -13,7 +13,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const SOURCES = {
-  isaidub: process.env.ISAIDUB_URL || "https://isaidub.asia",
+  isaidub: process.env.ISAIDUB_URL || "https://isaidubweb.me",
   moviesda: process.env.MOVIESDA_URL || "https://moviesdatamil.net"
 };
 

@@ -56,6 +56,37 @@ async function getMoviesdaBase() {
   return SOURCES.moviesda;
 }
 
+// isaidub mirrors also churn frequently (isaidub.asia -> isaidub.love ->
+// dead, etc.). Resolve a base that actually lists real movies so a stale
+// ISAIDUB_URL env value cannot brick the Tamil Dubbed section.
+let isaidubBaseCache = null;
+const ISAIDUB_CANDIDATES = [
+  process.env.ISAIDUB_URL || "https://isaidub.green",
+  "https://isaidub.green",
+  "https://isaidub.asia"
+];
+
+async function getIsaidubBase() {
+  if (isaidubBaseCache) return isaidubBaseCache;
+  for (const base of ISAIDUB_CANDIDATES) {
+    try {
+      const { data } = await axios.get(`${base}/tamil-2026-dubbed-movies/`, { ...axiosConfig, timeout: 12000 });
+      const $ = cheerio.load(data);
+      let movieLinks = 0;
+      $("div.f a, .folder a").each((_, el) => {
+        const href = $(el).attr("href") || "";
+        if (href.startsWith('/movie/')) movieLinks++;
+      });
+      if (movieLinks >= 3) {
+        isaidubBaseCache = base;
+        return base;
+      }
+    } catch (e) {}
+  }
+  isaidubBaseCache = SOURCES.isaidub;
+  return SOURCES.isaidub;
+}
+
 // Simple in-memory cache
 const cache = new Map();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
@@ -190,13 +221,13 @@ app.use('/app.js', express.static(path.join(__dirname, 'public', 'app.js')));
 // ISAIDUB API
 // =====================
 
-function generateISAIDUBThumbnail(title) {
+function generateISAIDUBThumbnail(title, base) {
   const name = title.toLowerCase()
     .replace(/[^a-z0-9\s]/g, '')
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-+|-+$/g, '');
-  return `${SOURCES.isaidub}/uploads/posters/${name}.jpg`;
+  return `${base || SOURCES.isaidub}/uploads/posters/${name}.jpg`;
 }
 
 function getTotalPages($) {
@@ -209,9 +240,9 @@ function getTotalPages($) {
   return maxPage || 0;
 }
 
-function parsePage($, seenLinks, source) {
+function parsePage($, seenLinks, source, prefixOverride) {
   const movies = [];
-  const prefix = source === 'isaidub' ? SOURCES.isaidub : SOURCES.moviesda;
+  const prefix = prefixOverride || (source === 'isaidub' ? SOURCES.isaidub : SOURCES.moviesda);
   const selector = "div.f a, .folder a";
   $(selector).each((_, el) => {
     const href = $(el).attr("href");
@@ -221,7 +252,7 @@ function parsePage($, seenLinks, source) {
       let link = href.startsWith("http") ? href : prefix + href;
       let thumbnail = null;
       if (source === 'isaidub') {
-        thumbnail = generateISAIDUBThumbnail(title);
+        thumbnail = generateISAIDUBThumbnail(title, prefix);
       } else {
         const nameForUrl = title.toLowerCase()
           .replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-');
@@ -233,7 +264,7 @@ function parsePage($, seenLinks, source) {
   return movies;
 }
 
-async function fetchPageResults(urls, seenLinks, source, concurrency = 10) {
+async function fetchPageResults(urls, seenLinks, source, prefix, concurrency = 10) {
   const results = [];
   for (let i = 0; i < urls.length; i += concurrency) {
     const batch = urls.slice(i, i + concurrency);
@@ -243,7 +274,7 @@ async function fetchPageResults(urls, seenLinks, source, concurrency = 10) {
     for (const html of htmls) {
       if (html) {
         const $ = cheerio.load(html);
-        results.push(...parsePage($, seenLinks, source));
+        results.push(...parsePage($, seenLinks, source, prefix));
       }
     }
   }
@@ -259,10 +290,11 @@ app.get('/api/isaidub/movies', async (req, res) => {
   const years = [category, String(parseInt(category) - 1), String(parseInt(category) - 2)];
   const movies = [];
   const seenLinks = new Set();
+  const isaBase = await getIsaidubBase();
   
   // Step 1: Fetch page 1 of all years concurrently to get total pages per year
   const page1Results = await Promise.all(years.map(year =>
-    axios.get(`${SOURCES.isaidub}/tamil-${year}-dubbed-movies/`, axiosConfig)
+    axios.get(`${isaBase}/tamil-${year}-dubbed-movies/`, axiosConfig)
       .then(r => ({ year, html: r.data }))
       .catch(() => ({ year, html: null }))
   ));
@@ -271,15 +303,15 @@ app.get('/api/isaidub/movies', async (req, res) => {
   for (const { year, html } of page1Results) {
     if (!html) continue;
     const $ = cheerio.load(html);
-    movies.push(...parsePage($, seenLinks, 'isaidub'));
+    movies.push(...parsePage($, seenLinks, 'isaidub', isaBase));
     const totalPages = getTotalPages($);
     for (let page = 2; page <= totalPages; page++) {
-      yearUrls.push(`${SOURCES.isaidub}/tamil-${year}-dubbed-movies/?get-page=${page}`);
+      yearUrls.push(`${isaBase}/tamil-${year}-dubbed-movies/?get-page=${page}`);
     }
   }
   
   // Step 2: Fetch remaining pages concurrently in batches
-  const remaining = await fetchPageResults(yearUrls, seenLinks, 'isaidub');
+  const remaining = await fetchPageResults(yearUrls, seenLinks, 'isaidub', isaBase);
   movies.push(...remaining);
 
   setCache(cacheKey, movies);
@@ -321,7 +353,7 @@ app.get('/api/search', async (req, res) => {
       const fullLink = href.startsWith("http") ? href : prefix + href;
       const nameForUrl = title.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '-');
       const thumb = source === 'isaidub'
-        ? generateISAIDUBThumbnail(title)
+        ? generateISAIDUBThumbnail(title, prefix)
         : `${prefix}/uploads/posters/${nameForUrl}.jpg`;
       allResults.push({ title, link: fullLink, thumbnail: thumb, source, score, year });
     });
@@ -351,8 +383,9 @@ app.get('/api/search', async (req, res) => {
   }
 
   try {
+    const isaBase = await getIsaidubBase();
     const mdBase = await getMoviesdaBase();
-    const isaidubBase = years.map(y => ({ year: y, source: 'isaidub', base: `${SOURCES.isaidub}/tamil-${y}-dubbed-movies/`, prefix: SOURCES.isaidub }));
+    const isaidubBase = years.map(y => ({ year: y, source: 'isaidub', base: `${isaBase}/tamil-${y}-dubbed-movies/`, prefix: isaBase }));
     const moviesdaBase = years.map(y => ({ year: y, source: 'moviesda', base: `${mdBase}/tamil-${y}-movies/`, prefix: mdBase }));
     const allBaseUrls = [...isaidubBase, ...moviesdaBase];
 
@@ -418,6 +451,7 @@ app.get('/api/isaidub/details', async (req, res) => {
   }
   
   try {
+    const isaBase = await getIsaidubBase();
     const { data } = await axios.get(url, axiosConfig);
     const $ = cheerio.load(data);
     
@@ -437,7 +471,7 @@ app.get('/api/isaidub/details', async (req, res) => {
     details.title = $('title').text().split('(')[0].trim() || '';
     
     const posterImg = $('picture img').attr('src') || $('img[src*="poster"]').attr('src') || $('img[alt*="poster"]').attr('src');
-    if (posterImg) details.thumbnail = posterImg.startsWith('http') ? posterImg : SOURCES.isaidub + posterImg;
+    if (posterImg) details.thumbnail = posterImg.startsWith('http') ? posterImg : isaBase + posterImg;
     
     $('ul.movie-info li').each((_, el) => {
       const text = $(el).text();
@@ -471,7 +505,7 @@ app.get('/api/isaidub/details', async (req, res) => {
     $('div.f a, .folder a').each((_, el) => {
       const href = $(el).attr('href');
       if (href && href.startsWith('/')) {
-        versionUrls.push(SOURCES.isaidub + href);
+        versionUrls.push(isaBase + href);
       } else if (href && href.startsWith('http')) {
         versionUrls.push(href);
       }
@@ -487,7 +521,7 @@ app.get('/api/isaidub/details', async (req, res) => {
           const href = $v(el).attr('href');
           const text = $v(el).text().trim();
           if (href) {
-            const fullUrl = href.startsWith('http') ? href : SOURCES.isaidub + href;
+            const fullUrl = href.startsWith('http') ? href : isaBase + href;
             details.qualities.push({
               quality: text || 'Download',
               url: fullUrl
@@ -502,7 +536,7 @@ app.get('/api/isaidub/details', async (req, res) => {
           if (href) {
             details.qualities.push({
               quality: text || 'Download',
-              url: href.startsWith("http") ? href : SOURCES.isaidub + href
+              url: href.startsWith("http") ? href : isaBase + href
             });
           }
         });
@@ -538,6 +572,7 @@ app.get('/api/isaidub/download', async (req, res) => {
   }
   
   try {
+    const isaBase = await getIsaidubBase();
     const { data } = await axios.get(url, { ...axiosConfig, timeout: 15000 });
     const $ = cheerio.load(data);
     
@@ -549,7 +584,7 @@ app.get('/api/isaidub/download', async (req, res) => {
       const title = $(el).find("strong").text().trim() || $(el).text().trim();
       
       if (href) {
-        const dlUrl = href.startsWith("http") ? href : SOURCES.isaidub + href;
+        const dlUrl = href.startsWith("http") ? href : isaBase + href;
         if (!seenDownloads.has(dlUrl)) {
           seenDownloads.add(dlUrl);
           result.download.push({

@@ -26,6 +26,36 @@ const axiosConfig = {
   }
 };
 
+// Moviesda content is often behind gateway/ad pages (e.g. moviessda.com routes
+// to gotopage.top). Resolve the live mirror that actually lists movies.
+let moviesdaBaseCache = null;
+const MOVIESDA_CANDIDATES = [
+  process.env.MOVIESDA_URL || "https://www.moviessda.com",
+  "https://moviezda.com",
+  "https://moviesdatamil.net"
+];
+
+async function getMoviesdaBase() {
+  if (moviesdaBaseCache) return moviesdaBaseCache;
+  for (const base of MOVIESDA_CANDIDATES) {
+    try {
+      const { data } = await axios.get(`${base}/tamil-2026-movies/`, { ...axiosConfig, timeout: 12000 });
+      const $ = cheerio.load(data);
+      let hasRealContent = false;
+      $("div.f a").each((_, el) => {
+        const href = $(el).attr("href") || "";
+        if (href.startsWith('/') || href.includes('movie')) hasRealContent = true;
+      });
+      if (hasRealContent) {
+        moviesdaBaseCache = base;
+        return base;
+      }
+    } catch (e) {}
+  }
+  moviesdaBaseCache = SOURCES.moviesda;
+  return SOURCES.moviesda;
+}
+
 // Simple in-memory cache
 const cache = new Map();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
@@ -321,8 +351,9 @@ app.get('/api/search', async (req, res) => {
   }
 
   try {
+    const mdBase = await getMoviesdaBase();
     const isaidubBase = years.map(y => ({ year: y, source: 'isaidub', base: `${SOURCES.isaidub}/tamil-${y}-dubbed-movies/`, prefix: SOURCES.isaidub }));
-    const moviesdaBase = years.map(y => ({ year: y, source: 'moviesda', base: `${SOURCES.moviesda}/tamil-${y}-movies/`, prefix: SOURCES.moviesda }));
+    const moviesdaBase = years.map(y => ({ year: y, source: 'moviesda', base: `${mdBase}/tamil-${y}-movies/`, prefix: mdBase }));
     const allBaseUrls = [...isaidubBase, ...moviesdaBase];
 
     const page1Results = await fetchInBatches(allBaseUrls.map(e => e.base));
@@ -541,9 +572,9 @@ app.get('/api/isaidub/download', async (req, res) => {
 // MOVIESDA API
 // =====================
 
-function parseMoviesdaPage($, seenLinks, source, defaultYear) {
+function parseMoviesdaPage($, seenLinks, source, defaultYear, prefix) {
   const movies = [];
-  const prefix = SOURCES.moviesda;
+  prefix = prefix || SOURCES.moviesda;
   $("div.f a").each((_, el) => {
     const href = $(el).attr("href");
     const title = $(el).text().replace("[+]", "").trim();
@@ -575,10 +606,11 @@ app.get('/api/moviesda/movies', async (req, res) => {
   const years = [category, String(parseInt(category) - 1), String(parseInt(category) - 2)];
   const movies = [];
   const seenLinks = new Set();
+  const mdBase = await getMoviesdaBase();
 
   // Step 1: Fetch page 1 of all years concurrently
   const page1Results = await Promise.all(years.map(year =>
-    axios.get(`${SOURCES.moviesda}/tamil-${year}-movies/`, axiosConfig)
+    axios.get(`${mdBase}/tamil-${year}-movies/`, axiosConfig)
       .then(r => ({ year, html: r.data }))
       .catch(() => ({ year, html: null }))
   ));
@@ -587,10 +619,10 @@ app.get('/api/moviesda/movies', async (req, res) => {
   for (const { year, html } of page1Results) {
     if (!html) continue;
     const $ = cheerio.load(html);
-    movies.push(...parseMoviesdaPage($, seenLinks, 'moviesda', year));
+    movies.push(...parseMoviesdaPage($, seenLinks, 'moviesda', year, mdBase));
     const totalPages = getTotalPages($);
     for (let page = 2; page <= totalPages; page++) {
-      yearUrls.push(`${SOURCES.moviesda}/tamil-${year}-movies/?page=${page}`);
+      yearUrls.push(`${mdBase}/tamil-${year}-movies/?page=${page}`);
     }
   }
 
@@ -605,7 +637,7 @@ app.get('/api/moviesda/movies', async (req, res) => {
       for (const html of htmls) {
         if (html) {
           const $ = cheerio.load(html);
-          movies.push(...parseMoviesdaPage($, seenLinks, 'moviesda', category));
+          movies.push(...parseMoviesdaPage($, seenLinks, 'moviesda', category, mdBase));
         }
       }
     }
@@ -628,6 +660,7 @@ app.get('/api/moviesda/details', async (req, res) => {
   }
   
   try {
+    const mdBase = await getMoviesdaBase();
     const { data } = await axios.get(url, axiosConfig);
     const $ = cheerio.load(data);
     
@@ -649,7 +682,7 @@ app.get('/api/moviesda/details', async (req, res) => {
     
     const posterImg = $('picture img').attr('src') || $('img[alt*="poster"]').attr('src');
     if (posterImg) {
-      details.thumbnail = posterImg.startsWith('http') ? posterImg : SOURCES.moviesda + posterImg;
+      details.thumbnail = posterImg.startsWith('http') ? posterImg : mdBase + posterImg;
     }
     
     $('ul.movie-info li').each((_, el) => {
@@ -684,7 +717,7 @@ app.get('/api/moviesda/details', async (req, res) => {
     $('.f a, .folder a').each((_, el) => {
       const href = $(el).attr('href');
       if (href && (href.startsWith('/') || href.startsWith('http')) && !href.includes('/download/')) {
-        const fullUrl = href.startsWith('http') ? href : SOURCES.moviesda + href;
+        const fullUrl = href.startsWith('http') ? href : mdBase + href;
         subUrls.push(fullUrl);
       }
     });
@@ -700,7 +733,7 @@ app.get('/api/moviesda/details', async (req, res) => {
           if (href && text && !text.match(/^(Home|Download|Tamil)/i)) {
             details.qualities.push({
               quality: text,
-              url: href.startsWith('http') ? href : SOURCES.moviesda + href
+              url: href.startsWith('http') ? href : mdBase + href
             });
           }
         });
@@ -716,7 +749,7 @@ app.get('/api/moviesda/details', async (req, res) => {
         if (href && text && (href.includes('-movie') || href.includes('-hd')) && !text.match(/^(Home|Download|Tamil)/i)) {
           details.qualities.push({
             quality: text,
-            url: href.startsWith('http') ? href : SOURCES.moviesda + href
+            url: href.startsWith('http') ? href : mdBase + href
           });
         }
       });
@@ -736,6 +769,7 @@ app.get('/api/moviesda/download', async (req, res) => {
   }
   
   try {
+    const mdBase = await getMoviesdaBase();
     const { data } = await axios.get(url, { ...axiosConfig, timeout: 15000 });
     const $ = cheerio.load(data);
     
@@ -747,7 +781,7 @@ app.get('/api/moviesda/download', async (req, res) => {
       const href = $(el).attr("href");
       const text = $(el).text().trim();
       if (href) {
-        const dlUrl = href.startsWith("http") ? href : SOURCES.moviesda + href;
+        const dlUrl = href.startsWith("http") ? href : mdBase + href;
         if (!seenDownloads.has(dlUrl)) {
           seenDownloads.add(dlUrl);
           result.download.push({ server: text || 'Download', url: dlUrl, mp4Url: null });
@@ -760,7 +794,7 @@ app.get('/api/moviesda/download', async (req, res) => {
       const href = $(el).attr("href");
       const text = $(el).text().trim();
       if (href && (href.includes('/download/') || href.includes('.mp4'))) {
-        const dlUrl = href.startsWith("http") ? href : SOURCES.moviesda + href;
+        const dlUrl = href.startsWith("http") ? href : mdBase + href;
         if (!seenDownloads.has(dlUrl)) {
           seenDownloads.add(dlUrl);
           result.download.push({ server: text || 'Download', url: dlUrl, mp4Url: null });

@@ -14,7 +14,8 @@ const PORT = process.env.PORT || 3000;
 
 const SOURCES = {
   isaidub: process.env.ISAIDUB_URL || "https://isaidub.green",
-  moviesda: process.env.MOVIESDA_URL || "https://www.moviessda.com"
+  moviesda: process.env.MOVIESDA_URL || "https://www.moviessda.com",
+  isaimini: process.env.ISAIMINI_URL || "https://www.isaimini.doctor"
 };
 
 const axiosConfig = {
@@ -57,34 +58,174 @@ async function getMoviesdaBase() {
 }
 
 // isaidub mirrors also churn frequently (isaidub.asia -> isaidub.love ->
-// dead, etc.). Resolve a base that actually lists real movies so a stale
+// dead, etc.). Resolve a base that actually lists real year movies so a stale
 // ISAIDUB_URL env value cannot brick the Tamil Dubbed section.
+// isaiidub.com / isaidub.asia often 302 to a hub page (/moviesda/) whose only
+// non-nav folder link is "Hollywood English Movies" — that must be rejected.
 let isaidubBaseCache = null;
 const ISAIDUB_CANDIDATES = [
-  process.env.ISAIDUB_URL || "https://isaiidub.com",
+  process.env.ISAIDUB_URL,
   "https://isaidub.green",
+  "https://isaiidub.com",
   "https://isaidub.asia"
-];
+].filter((v, i, a) => v && a.indexOf(v) === i);
+
+function countIsaidubMovieEntries($, base) {
+  let relativeMovieLinks = 0;
+  let realMovieTitles = 0;
+  $("div.f a, .folder a").each((_, el) => {
+    const href = $(el).attr("href") || "";
+    const title = $(el).text().replace("[+]", "").trim();
+    const isMoviePath = href.startsWith("/movie/") ||
+      (/^https?:\/\//.test(href) && /\/movie\//.test(href) && (!base || href.startsWith(base)));
+    if (!isMoviePath) return;
+    relativeMovieLinks++;
+    if (title && /\(\d{4}\)/.test(title) && !title.match(/^(Download|Tamil|Home|Contact|Check)/i)) {
+      realMovieTitles++;
+    }
+  });
+  return { relativeMovieLinks, realMovieTitles };
+}
 
 async function getIsaidubBase() {
   if (isaidubBaseCache) return isaidubBaseCache;
   for (const base of ISAIDUB_CANDIDATES) {
     try {
-      const { data } = await axios.get(`${base}/tamil-2026-dubbed-movies/`, { ...axiosConfig, timeout: 12000 });
-      const $ = cheerio.load(data);
-      let movieLinks = 0;
-      $("div.f a, .folder a").each((_, el) => {
-        const href = $(el).attr("href") || "";
-        if (href.startsWith('/movie/')) movieLinks++;
+      const resp = await axios.get(`${base}/tamil-2026-dubbed-movies/`, {
+        ...axiosConfig,
+        timeout: 12000,
+        maxRedirects: 5,
+        validateStatus: (s) => s >= 200 && s < 400
       });
-      if (movieLinks >= 3) {
+      const finalUrl = resp.request?.res?.responseUrl || `${base}/tamil-2026-dubbed-movies/`;
+      // Hub / landing redirects (e.g. .../tamil-2026-dubbed-movies/ -> .../moviesda/)
+      // are not year listings — skip this candidate.
+      if (!/tamil-\d{4}-dubbed-movies/i.test(finalUrl)) continue;
+      const $ = cheerio.load(resp.data);
+      const { relativeMovieLinks, realMovieTitles } = countIsaidubMovieEntries($, base);
+      if (relativeMovieLinks >= 3 && realMovieTitles >= 3) {
         isaidubBaseCache = base;
         return base;
       }
     } catch (e) {}
   }
-  isaidubBaseCache = SOURCES.isaidub;
-  return SOURCES.isaidub;
+  // Known-good live mirror rather than a possibly-dead env/default.
+  isaidubBaseCache = "https://isaidub.green";
+  return isaidubBaseCache;
+}
+
+function invalidateIsaidubBase() {
+  isaidubBaseCache = null;
+}
+
+const ISAIMINI_CATEGORIES = {
+  malayalam: '/2/category/malayalam-movies/default.html',
+  tamil: '/6/category/tamil-movies/default.html',
+  tamilDubbed: '/5/category/tamil-dubbed-movies/default.html',
+  telugu: '/4/category/telugu-movies/default.html',
+  teluguDubbed: '/3/category/telugu-dubbed-movies/default.html',
+  kannada: '/1/category/kannada-movies/default.html'
+};
+
+function getIsaiminiCategoryPages($) {
+  const pages = new Set();
+  $('a[href*="page="]').each((_, el) => {
+    const href = $(el).attr('href') || '';
+    const match = href.match(/page=(\d+)/);
+    if (match) pages.add(parseInt(match[1]));
+  });
+  return Array.from(pages).sort((a, b) => a - b);
+}
+
+function parseIsaiminiCategoryPage($, seenLinks) {
+  const movies = [];
+  $('.dir a[href*="/movie/"]').each((_, el) => {
+    const href = $(el).attr('href');
+    const title = $(el).text().trim();
+    if (!href || !title || seenLinks.has(href)) return;
+    if (title.match(/^(Download|Home|Contact|Check|Android|APP)/i)) return;
+    if (!/\(\d{4}\)/.test(title)) return;
+    seenLinks.add(href);
+    const link = href.startsWith('http') ? href : SOURCES.isaimini + href;
+    const imgName = title.replace(/ /g, '_') + '.jpg';
+    const thumbnail = `${SOURCES.isaimini}/files/images/${imgName}`;
+    movies.push({ title, link, thumbnail, source: 'isaimini' });
+  });
+  return movies;
+}
+
+async function scrapeIsaiminiCategory(category, year, maxPages = 10) {
+  const catPath = ISAIMINI_CATEGORIES[category] || ISAIMINI_CATEGORIES.malayalam;
+  const seenLinks = new Set();
+  const allMovies = [];
+
+  const baseUrl = SOURCES.isaimini + catPath;
+  const page1Url = `${baseUrl}${year ? `?page=1` : ''}`;
+
+  try {
+    const { data } = await axios.get(page1Url, axiosConfig);
+    const $ = cheerio.load(data);
+    allMovies.push(...parseIsaiminiCategoryPage($, seenLinks));
+
+    const pages = getIsaiminiCategoryPages($);
+    const targetPages = year ? pages.filter(p => p <= maxPages) : pages.slice(0, maxPages);
+
+    for (const page of targetPages) {
+      if (page === 1) continue;
+      const pageUrl = `${baseUrl}?page=${page}`;
+      try {
+        const { data } = await axios.get(pageUrl, axiosConfig);
+        const $ = cheerio.load(data);
+        allMovies.push(...parseIsaiminiCategoryPage($, seenLinks));
+      } catch (e) {}
+    }
+  } catch (e) {}
+
+  if (year) {
+    return allMovies.filter(m => m.title.includes(`(${year})`));
+  }
+  return allMovies;
+}
+
+async function getIsaiminiMp4Url(url) {
+  // url may be a /view/ page link, /download/ server link, or the file page
+  let currentUrl = url;
+
+  // If given the file page (has /file/), find the /view/ link
+  if (currentUrl.includes('/file/')) {
+    const { data } = await axios.get(currentUrl, axiosConfig);
+    const $ = cheerio.load(data);
+    const viewHref = $('a[href*="/view/"]').first().attr('href');
+    if (viewHref) {
+      currentUrl = viewHref.startsWith('http') ? viewHref : SOURCES.isaimini + viewHref;
+    }
+  }
+
+  // If given a /view/ page, find the dwnLink (/download/.../server_N)
+  if (currentUrl.includes('/view/')) {
+    const { data } = await axios.get(currentUrl, axiosConfig);
+    const $ = cheerio.load(data);
+    const dwnHref = $('.downLink a.dwnLink, a.dwnLink').first().attr('href') || $('a[href*="/download/"]').first().attr('href');
+    if (dwnHref) {
+      currentUrl = dwnHref.startsWith('http') ? dwnHref : SOURCES.isaimini + dwnHref;
+    }
+  }
+
+  // Now currentUrl should be a /download/.../server_1 link → follow 302 to CDN mp4
+  try {
+    const resp = await axios.get(currentUrl, {
+      ...axiosConfig,
+      headers: { ...axiosConfig.headers, 'Referer': SOURCES.isaimini + '/' },
+      maxRedirects: 0
+    });
+    return null;
+  } catch (e) {
+    if (e.response && e.response.status >= 300 && e.response.status < 400) {
+      const loc = e.response.headers?.location;
+      if (loc) return loc.startsWith('http') ? loc : new URL(loc, currentUrl).href;
+    }
+    return null;
+  }
 }
 
 // Simple in-memory cache
@@ -246,19 +387,24 @@ function parsePage($, seenLinks, source, prefixOverride) {
   $(selector).each((_, el) => {
     const href = $(el).attr("href");
     const title = $(el).text().replace("[+]", "").trim();
-    if (href && title && !title.match(/^(Download|Tamil|Home|Contact|Check)/i) && !seenLinks.has(href)) {
-      seenLinks.add(href);
-      let link = href.startsWith("http") ? href : prefix + href;
-      let thumbnail = null;
-      if (source === 'isaidub') {
-        thumbnail = generateISAIDUBThumbnail(title, prefix);
-      } else {
-        const nameForUrl = title.toLowerCase()
-          .replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-');
-        thumbnail = `${prefix}/uploads/posters/${nameForUrl}.jpg`;
-      }
-      movies.push({ title, link, thumbnail, source });
+    if (!href || !title || seenLinks.has(href)) return;
+    if (title.match(/^(Download|Tamil|Home|Contact|Check)/i)) return;
+    // isaidub year pages only list real titles under /movie/. Nav/hub folders
+    // (category links, "Hollywood English Movies" on redirected hubs, etc.) are
+    // not movies for the selected year.
+    if (source === 'isaidub' && !/\/movie\//.test(href)) return;
+    if (source === 'isaidub' && !/\(\d{4}\)/.test(title)) return;
+    seenLinks.add(href);
+    let link = href.startsWith("http") ? href : prefix + href;
+    let thumbnail = null;
+    if (source === 'isaidub') {
+      thumbnail = generateISAIDUBThumbnail(title, prefix);
+    } else {
+      const nameForUrl = title.toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-');
+      thumbnail = `${prefix}/uploads/posters/${nameForUrl}.jpg`;
     }
+    movies.push({ title, link, thumbnail, source });
   });
   return movies;
 }
@@ -280,45 +426,81 @@ async function fetchPageResults(urls, seenLinks, source, prefix, concurrency = 1
   return results;
 }
 
+function isUsableIsaidubList(list) {
+  return Array.isArray(list) && list.length >= 3 &&
+    list.every(m => m && m.title && /\/movie\//.test(m.link || ''));
+}
+
+async function scrapeIsaidubYearList(year) {
+  const seenLinks = new Set();
+  const candidates = [...ISAIDUB_CANDIDATES];
+  if (isaidubBaseCache && !candidates.includes(isaidubBaseCache)) {
+    candidates.unshift(isaidubBaseCache);
+  }
+  if (!candidates.includes("https://isaidub.green")) {
+    candidates.push("https://isaidub.green");
+  }
+
+  for (const isaBase of candidates) {
+    try {
+      const page1 = await axios.get(`${isaBase}/tamil-${year}-dubbed-movies/`, {
+        ...axiosConfig,
+        timeout: 15000,
+        maxRedirects: 5,
+        validateStatus: (s) => s >= 200 && s < 400
+      });
+      const finalUrl = page1.request?.res?.responseUrl || page1.config?.url ||
+        `${isaBase}/tamil-${year}-dubbed-movies/`;
+      // Reject hub redirects — they are not the year listing.
+      if (!new RegExp(`tamil-${year}-dubbed-movies`, 'i').test(finalUrl)) continue;
+
+      const $ = cheerio.load(page1.data);
+      const movies = parsePage($, seenLinks, 'isaidub', isaBase);
+      if (movies.length < 3) continue;
+
+      const yearUrls = [];
+      const totalPages = getTotalPages($);
+      for (let page = 2; page <= totalPages; page++) {
+        yearUrls.push(`${isaBase}/tamil-${year}-dubbed-movies/?get-page=${page}`);
+      }
+      const remaining = await fetchPageResults(yearUrls, seenLinks, 'isaidub', isaBase);
+      movies.push(...remaining);
+
+      if (isUsableIsaidubList(movies)) {
+        isaidubBaseCache = isaBase;
+        return movies;
+      }
+    } catch (e) {}
+  }
+  return null;
+}
+
 app.get('/api/isaidub/movies', async (req, res) => {
   const { category = '2026', refresh } = req.query;
   const cacheKey = `isaidub:movies:${category}`;
   // ?refresh=1 bypasses the in-memory cache so a warm serverless instance can
   // never keep pinning a stale cold-start scrape (self-heal escape hatch).
-  const cached = refresh === '1' ? null : getCached(cacheKey);
+  // Also ignore any cached junk list (old hub-page scrapes returned 1 item).
+  let cached = refresh === '1' ? null : getCached(cacheKey);
+  if (cached && !isUsableIsaidubList(cached)) {
+    cache.delete(cacheKey);
+    cached = null;
+    invalidateIsaidubBase();
+  }
   if (cached) return res.json(cached);
 
-  // Speed-fix: scrape only the requested year (single year) instead of 3 years,
-  // so cold-start serverless deploys finish within the request timeout.
-  const years = [category];
-  const seenLinks = new Set();
-  const movies = [];
-  const isaBase = await getIsaidubBase();
-  
-  // Step 1: Fetch page 1 of all years concurrently to get total pages per year
-  const page1Results = await Promise.all(years.map(year =>
-    axios.get(`${isaBase}/tamil-${year}-dubbed-movies/`, axiosConfig)
-      .then(r => ({ year, html: r.data }))
-      .catch(() => ({ year, html: null }))
-  ));
-  
-  const yearUrls = [];
-  for (const { year, html } of page1Results) {
-    if (!html) continue;
-    const $ = cheerio.load(html);
-    movies.push(...parsePage($, seenLinks, 'isaidub', isaBase));
-    const totalPages = getTotalPages($);
-    for (let page = 2; page <= totalPages; page++) {
-      yearUrls.push(`${isaBase}/tamil-${year}-dubbed-movies/?get-page=${page}`);
-    }
-  }
-  
-  // Step 2: Fetch remaining pages concurrently in batches
-  const remaining = await fetchPageResults(yearUrls, seenLinks, 'isaidub', isaBase);
-  movies.push(...remaining);
+  // Scrape only the requested year so cold-start serverless finishes in time.
+  const movies = await scrapeIsaidubYearList(category);
 
-  setCache(cacheKey, movies);
-  res.json(movies);
+  // Never pin a bad/empty/hub scrape into the cache — that is what stuck
+  // "Hollywood English Movies" as the only result on Vercel.
+  if (movies && isUsableIsaidubList(movies)) {
+    setCache(cacheKey, movies);
+    return res.json(movies);
+  }
+
+  invalidateIsaidubBase();
+  res.json([]);
 });
 
 app.get('/api/search', async (req, res) => {
@@ -344,6 +526,7 @@ app.get('/api/search', async (req, res) => {
       const title = $(el).text().replace("[+]", "").trim();
       if (!href || !title) return;
       if (title.match(/^(Download|Tamil|Home|Contact|Check)/i)) return;
+      if (source === 'isaidub' && !/\/movie\//.test(href)) return;
       if (!title.toLowerCase().includes(searchTerm) || seenLinks.has(href)) return;
       seenLinks.add(href);
       const titleLower = title.toLowerCase();
@@ -564,6 +747,213 @@ app.get('/api/isaidub/mp4', async (req, res) => {
     res.json({ mp4Url });
   } catch (error) {
     res.json({ mp4Url: null, error: error.message });
+  }
+});
+
+// =====================
+// ISAIMINI API
+// =====================
+
+app.get('/api/isaimini/movies', async (req, res) => {
+  const { category = 'malayalam', year, refresh } = req.query;
+  const cacheKey = `isaimini:movies:${category}:${year || 'all'}`;
+  const cached = refresh === '1' ? null : getCached(cacheKey);
+  if (cached) return res.json(cached);
+
+  try {
+    const movies = await scrapeIsaiminiCategory(category, year);
+    if (movies && movies.length > 0) {
+      setCache(cacheKey, movies);
+      return res.json(movies);
+    }
+    res.json([]);
+  } catch (error) {
+    res.json([]);
+  }
+});
+
+app.get('/api/isaimini/details', async (req, res) => {
+  const { url } = req.query;
+  
+  if (!url) {
+    return res.status(400).json({ error: "URL parameter is required" });
+  }
+  
+  try {
+    const { data } = await axios.get(url, axiosConfig);
+    const $ = cheerio.load(data);
+    
+    const details = {
+      title: '',
+      genres: '',
+      director: '',
+      starring: '',
+      quality: '',
+      language: '',
+      rating: '',
+      synopsis: '',
+      thumbnail: null,
+      qualities: []
+    };
+    
+    details.title = $('title').text().split('(')[0].trim() || '';
+    
+    const ldJson = $('script[type="application/ld+json"]').first().text();
+    if (ldJson) {
+      try {
+        const parsed = JSON.parse(ldJson);
+        if (parsed['@type'] === 'Movie') {
+          details.title = parsed.name || details.title;
+          details.genres = parsed.genre?.join(', ') || '';
+          details.director = parsed.director?.name || '';
+          details.starring = parsed.actor?.map(a => a.name).join(', ') || '';
+          details.quality = parsed.encodingFormat || '';
+          details.language = parsed.inLanguage || '';
+          details.synopsis = parsed.description || '';
+          details.thumbnail = parsed.image || null;
+          if (parsed.offers) {
+            details.qualities = parsed.offers.map(o => ({
+              quality: o.name?.replace('Full Movie ', '').replace('.mp4', '').trim() || 'Download',
+              url: o.url
+            }));
+          }
+        }
+      } catch (e) {}
+    }
+    
+    if (!details.thumbnail) {
+      const posterImg = $('img[src*="files/images"]').first().attr('src');
+      if (posterImg) details.thumbnail = posterImg.startsWith('http') ? posterImg : SOURCES.isaimini + posterImg;
+    }
+    
+    if (details.qualities.length === 0) {
+      $('.file-item a[href*="/file/"]').each((_, el) => {
+        const href = $(el).attr('href');
+        const text = $(el).text().trim();
+        if (href) {
+          details.qualities.push({
+            quality: text || 'Download',
+            url: href.startsWith('http') ? href : SOURCES.isaimini + href
+          });
+        }
+      });
+    }
+    
+    res.json(details);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/isaimini/download', async (req, res) => {
+  const { url } = req.query;
+  
+  if (!url) {
+    return res.status(400).json({ error: "URL parameter is required" });
+  }
+  
+  try {
+    const { data } = await axios.get(url, { ...axiosConfig, timeout: 15000 });
+    const $ = cheerio.load(data);
+    
+    const result = { download: [], watch: [], info: {} };
+    const seen = new Set();
+    
+    // Each file page links to a /view/ page (Go To Download Page)
+    const viewLinks = [];
+    $('a[href*="/view/"]').each((_, el) => {
+      const href = $(el).attr('href');
+      if (!href || seen.has(href)) return;
+      seen.add(href);
+      const fullUrl = href.startsWith('http') ? href : SOURCES.isaimini + href;
+      const label = $(el).text().trim() || 'Download';
+      viewLinks.push({ label, fullUrl });
+    });
+    
+    // Resolve each view page → download server → direct MP4
+    for (const { label, fullUrl } of viewLinks) {
+      const labelLower = label.toLowerCase();
+      let fileSize = null;
+      const sizeMatch = labelLower.match(/(\d+(\.\d+)?\s*(gb|mb|kb))/i);
+      if (sizeMatch) fileSize = sizeMatch[1];
+      
+      const mp4 = await getIsaiminiMp4Url(fullUrl);
+      result.download.push({
+        server: mp4 ? (mp4.split('/').pop() || label) : label,
+        url: mp4 || fullUrl,
+        thumbnail: null,
+        fileSize
+      });
+    }
+    
+    if (result.download.length === 0) {
+      // Direct /download/ links on the page (e.g. file page already has them)
+      const directLinks = [];
+      $('a[href*="/download/"]').each((_, el) => {
+        const href = $(el).attr('href');
+        if (!href || seen.has(href)) return;
+        seen.add(href);
+        const fullUrl = href.startsWith('http') ? href : SOURCES.isaimini + href;
+        const label = $(el).text().trim() || 'Download';
+        directLinks.push({ label, fullUrl });
+      });
+      for (const { label, fullUrl } of directLinks) {
+        const mp4 = await getIsaiminiMp4Url(fullUrl);
+        result.download.push({
+          server: label,
+          url: mp4 || fullUrl,
+          thumbnail: null,
+          fileSize: null
+        });
+      }
+    }
+    
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/isaimini/mp4', async (req, res) => {
+  const { url } = req.query;
+  
+  if (!url) {
+    return res.status(400).json({ error: "URL parameter is required" });
+  }
+  
+  try {
+    const mp4Url = await getIsaiminiMp4Url(url);
+    res.json({ mp4Url });
+  } catch (error) {
+    res.json({ mp4Url: null, error: error.message });
+  }
+});
+
+app.get('/api/isaimini/search', async (req, res) => {
+  const { q } = req.query;
+  if (!q) return res.status(400).json({ error: "Query parameter 'q' is required" });
+  
+  try {
+    const searchUrl = `${SOURCES.isaimini}/mobile/search?find=${encodeURIComponent(q)}&per_page=10`;
+    const { data } = await axios.get(searchUrl, axiosConfig);
+    const $ = cheerio.load(data);
+    
+    const results = [];
+    const seen = new Set();
+    $('.dir a[href*="/movie/"]').each((_, el) => {
+      const href = $(el).attr('href');
+      const title = $(el).text().trim();
+      if (!href || !title || seen.has(href)) return;
+      seen.add(href);
+      const fullLink = href.startsWith('http') ? href : SOURCES.isaimini + href;
+      const imgName = title.replace(/ /g, '_') + '.jpg';
+      const thumbnail = `${SOURCES.isaimini}/files/images/${imgName}`;
+      results.push({ title, link: fullLink, thumbnail, source: 'isaimini', year: '' });
+    });
+    
+    res.json(results);
+  } catch (error) {
+    res.json([]);
   }
 });
 

@@ -199,6 +199,7 @@ function updateMotionButtons() {
 async function checkApiStatus() {
     const isaidubStatus = document.getElementById('isaidub-status');
     const moviesdaStatus = document.getElementById('moviesda-status');
+    const isaiminiStatus = document.getElementById('isaimini-status');
     
     try {
         const controller = new AbortController();
@@ -236,6 +237,25 @@ async function checkApiStatus() {
         }
     } catch {
         moviesdaStatus?.classList.add('offline');
+    }
+
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        
+        const response = await fetch(`${API_BASE}/api/isaimini/movies?category=malayalam`, {
+            signal: controller.signal
+        });
+        clearTimeout(timeout);
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (Array.isArray(data) && data.length > 0) {
+                isaiminiStatus?.classList.remove('offline');
+            }
+        }
+    } catch {
+        isaiminiStatus?.classList.add('offline');
     }
 }
 
@@ -755,7 +775,7 @@ function displaySearchDropdown(results, query) {
                 : '<div style="width:36px;height:52px;background:var(--dark-lighter);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;">🎬</div>'}
             <div class="result-info">
                 <div class="result-title">${escapeHtml(movie.title)}</div>
-                <div class="result-source">${movie.source === 'isaidub' ? 'Tamil Dubbed' : 'Tamil Movies'}${movie.year ? ' · ' + movie.year : ''}</div>
+                <div class="result-source">${movie.source === 'isaidub' ? 'Tamil Dubbed' : movie.source === 'isaimini' ? 'Malayalam Movies' : 'Tamil Movies'}${movie.year ? ' · ' + movie.year : ''}</div>
             </div>
         </div>
     `).join('');
@@ -796,7 +816,7 @@ function createMovieCard(movie, showRemove = false) {
         ? `<img class="movie-img" src="${movie.thumbnail}" alt="${escapeHtml(movie.title)}" loading="lazy" onerror="this.parentElement.querySelector('.movie-poster').style.display='flex'; this.style.display='none';">`
         : '';
     const emojiHtml = `<div class="movie-poster" style="display:${movie.thumbnail ? 'none' : 'flex'};">🎬</div>`;
-    const sourceBadge = movie.source === 'moviesda' ? 'Tamil' : 'Tamil Dubbed';
+    const sourceBadge = movie.source === 'moviesda' ? 'Tamil' : movie.source === 'isaimini' ? 'Malayalam' : 'Tamil Dubbed';
     const isInList = Storage.isInMyList(movie);
     
     let actionsHtml = '';
@@ -894,6 +914,8 @@ async function fetchMovieDetails(url) {
         
         if (currentSource === 'isaidub') {
             renderISAIDUBQualities(details.qualities || []);
+        } else if (currentSource === 'isaimini') {
+            renderIsaiminiQualities(details.qualities || []);
         } else {
             renderMoviesdaQualities(details.qualities || []);
         }
@@ -952,6 +974,32 @@ function renderMoviesdaQualities(qualities) {
     // Auto-load first quality
     if (qualities[0] && qualities[0].url) {
         fetchMoviesdaDownloadLinks(qualities[0].url);
+    }
+}
+
+function renderIsaiminiQualities(qualities) {
+    if (!qualities || qualities.length === 0) {
+        qualityOptions.innerHTML = '<p style="color:var(--text-muted);">No qualities found</p>';
+        downloadLinks.innerHTML = '<p class="error-msg">This movie may not have download links available yet</p>';
+        loadingLinks.style.display = 'none';
+        return;
+    }
+    
+    qualityOptions.innerHTML = qualities.map((q, i) => 
+        `<button class="quality-btn ${i === 0 ? 'selected' : ''}" data-url="${q.url}">${q.quality}</button>`
+    ).join('');
+    
+    qualityOptions.querySelectorAll('.quality-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            qualityOptions.querySelectorAll('.quality-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            fetchIsaiminiDownloadLinks(btn.dataset.url);
+        });
+    });
+    
+    // Auto-load first quality
+    if (qualities[0] && qualities[0].url) {
+        fetchIsaiminiDownloadLinks(qualities[0].url);
     }
 }
 
@@ -1059,6 +1107,56 @@ async function fetchMoviesdaDownloadLinks(url) {
                     ${link.server}
                 </a>`;
             });
+        }
+        
+        updateProgress(100, 'Complete!');
+        
+        if (html) {
+            downloadLinks.innerHTML = html;
+        } else {
+            downloadLinks.innerHTML = '<p class="error-msg">No download links found.</p>';
+        }
+    } catch (error) {
+        downloadLinks.innerHTML = `<p class="error-msg">Error: ${error.message}</p>`;
+    } finally {
+        loadingLinks.style.display = 'none';
+    }
+}
+
+async function fetchIsaiminiDownloadLinks(url) {
+    loadingLinks.style.display = 'flex';
+    downloadLinks.innerHTML = '';
+    fileInfo.style.display = 'none';
+    updateProgress(10, 'Fetching links...');
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/isaimini/download?url=${encodeURIComponent(url)}`);
+        updateProgress(50, 'Processing...');
+        const data = await response.json();
+        
+        let html = '';
+        
+        if (data.download && data.download.length > 0) {
+            html += '<h4 style="color:var(--primary);margin:15px 0 10px;">Download Links</h4>';
+            for (const link of data.download) {
+                updateProgress(70, 'Getting MP4 URL...');
+                let downloadUrl = link.url;
+                
+                // If it's already a direct CDN mp4, use it directly
+                if (!/\.mp4/i.test(downloadUrl)) {
+                    try {
+                        const mp4Response = await fetch(`${API_BASE}/api/isaimini/mp4?url=${encodeURIComponent(link.url)}`);
+                        const mp4Data = await mp4Response.json();
+                        if (mp4Data.mp4Url) downloadUrl = mp4Data.mp4Url;
+                    } catch (e) {}
+                }
+                
+                html += `<a href="${downloadUrl}" download="${link.server}.mp4" target="_blank" class="download-btn">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                    ${link.server}
+                </a>`;
+            }
+            updateProgress(80, 'Loading thumbnails...');
         }
         
         updateProgress(100, 'Complete!');
@@ -1369,7 +1467,7 @@ async function searchMoviesMobile(query) {
                 <img src="${escapeHtml(movie.thumbnail || '')}" alt="" onerror="this.style.display='none'">
                 <div class="result-info">
                     <div class="result-title">${escapeHtml(movie.title)}</div>
-                    <div class="result-source">${movie.source === 'isaidub' ? 'Tamil Dubbed' : 'Tamil Movies'}${movie.year ? ' · ' + movie.year : ''}</div>
+<div class="result-source">${movie.source === 'isaidub' ? 'Tamil Dubbed' : movie.source === 'isaimini' ? 'Malayalam Movies' : 'Tamil Movies'}${movie.year ? ' · ' + movie.year : ''}</div>
                 </div>
             </div>
         `).join('');

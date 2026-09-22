@@ -347,7 +347,7 @@ async function fetchMovies() {
         const url = `${API_BASE}/api/${source}/movies?category=${currentCategory}`;
         setSplashStatus('Fetching movies...', 20);
         const controller = new AbortController();
-        const fetchTimeout = setTimeout(() => controller.abort(), 8000);
+        const fetchTimeout = setTimeout(() => controller.abort(), 25000);
         const response = await fetch(url, { signal: controller.signal });
         clearTimeout(fetchTimeout);
         setSplashStatus('Processing movies...', 70);

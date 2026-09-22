@@ -105,7 +105,6 @@ function getCached(key) {
 
 function setCache(key, data) {
   cache.set(key, { data, timestamp: Date.now() });
-  // Prune old entries if cache grows too large
   if (cache.size > 50) {
     const oldest = cache.entries().next().value;
     if (oldest) cache.delete(oldest[0]);
@@ -282,14 +281,18 @@ async function fetchPageResults(urls, seenLinks, source, prefix, concurrency = 1
 }
 
 app.get('/api/isaidub/movies', async (req, res) => {
-  const { category = '2026' } = req.query;
+  const { category = '2026', refresh } = req.query;
   const cacheKey = `isaidub:movies:${category}`;
-  const cached = getCached(cacheKey);
+  // ?refresh=1 bypasses the in-memory cache so a warm serverless instance can
+  // never keep pinning a stale cold-start scrape (self-heal escape hatch).
+  const cached = refresh === '1' ? null : getCached(cacheKey);
   if (cached) return res.json(cached);
 
-  const years = [category, String(parseInt(category) - 1), String(parseInt(category) - 2)];
-  const movies = [];
+  // Speed-fix: scrape only the requested year (single year) instead of 3 years,
+  // so cold-start serverless deploys finish within the request timeout.
+  const years = [category];
   const seenLinks = new Set();
+  const movies = [];
   const isaBase = await getIsaidubBase();
   
   // Step 1: Fetch page 1 of all years concurrently to get total pages per year
@@ -633,12 +636,14 @@ function parseMoviesdaPage($, seenLinks, source, defaultYear, prefix) {
 }
 
 app.get('/api/moviesda/movies', async (req, res) => {
-  const { category = '2026' } = req.query;
+  const { category = '2026', refresh } = req.query;
   const cacheKey = `moviesda:movies:${category}`;
-  const cached = getCached(cacheKey);
+  const cached = refresh === '1' ? null : getCached(cacheKey);
   if (cached) return res.json(cached);
 
-  const years = [category, String(parseInt(category) - 1), String(parseInt(category) - 2)];
+  // Speed-fix: scrape only the requested year (single year) instead of 3 years,
+  // so cold-start serverless deploys finish within the request timeout.
+  const years = [category];
   const movies = [];
   const seenLinks = new Set();
   const mdBase = await getMoviesdaBase();

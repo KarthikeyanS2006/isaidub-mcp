@@ -61,7 +61,7 @@ async function getMoviesdaBase() {
 // ISAIDUB_URL env value cannot brick the Tamil Dubbed section.
 let isaidubBaseCache = null;
 const ISAIDUB_CANDIDATES = [
-  process.env.ISAIDUB_URL || "https://isaidub.green",
+  process.env.ISAIDUB_URL || "https://isaiidub.com",
   "https://isaidub.green",
   "https://isaidub.asia"
 ];

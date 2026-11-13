@@ -33,7 +33,7 @@ let moviesdaBaseCache = null;
 const MOVIESDA_CANDIDATES = [
   process.env.MOVIESDA_URL || "https://www.moviessda.com",
   "https://moviezda.com",
-  "https://moviesdatamil.net"
+  "https://www.moviesda.pet"
 ];
 
 async function getMoviesdaBase() {

@@ -31,8 +31,8 @@ const axiosConfig = {
 // to gotopage.top). Resolve the live mirror that actually lists movies.
 let moviesdaBaseCache = null;
 const MOVIESDA_CANDIDATES = [
-  process.env.MOVIESDA_URL || "https://www.moviessda.com",
-  "https://moviezda.com",
+  process.env.MOVIESDA_URL || "https://www.moviesda.si",
+  "https://moviezda.co",
   "https://www.moviesda.pet"
 ];
 

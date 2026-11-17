@@ -2,7 +2,7 @@ name: Keep HuggingFace Space Alive
 
 on:
   schedule:
-    # Runs every 4 hours
+    # Runs at 17 minutes past every 4th hour to avoid queue congestion
     - cron: '17 */4 * * *'
   workflow_dispatch:
 

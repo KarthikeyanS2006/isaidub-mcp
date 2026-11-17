@@ -1,0 +1,18 @@
+name: Keep HuggingFace Space Alive
+
+on:
+  schedule:
+    # Runs every 25 minutes to prevent the 48-hour timeout
+    - cron: '*/25 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping-space:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send keep-alive ping
+        env:
+          SPACE_URL: ${{ secrets.HUGGING_FACE_SPACE_URL }}
+        run: |
+          echo "Pinging $SPACE_URL to keep it awake..."
+          curl -I "$SPACE_URL"

@@ -3,7 +3,7 @@ name: Keep HuggingFace Space Alive
 on:
   schedule:
     # Runs every 4 hours
-    - cron: '0 */4 * * *'
+    - cron: '17 */4 * * *'
   workflow_dispatch:
 
 jobs:

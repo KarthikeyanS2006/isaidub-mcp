@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000;
 
 const SOURCES = {
   isaidub: process.env.ISAIDUB_URL || "https://isaiidub.com",
-  moviesda: process.env.MOVIESDA_URL || "https://www.moviesda.pet",
+  moviesda: process.env.MOVIESDA_URL || "https://moviezda.co",
   isaimini: process.env.ISAIMINI_URL || "https://www.isaimini.doctor"
 };
 

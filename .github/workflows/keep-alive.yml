@@ -2,8 +2,8 @@ name: Keep HuggingFace Space Alive
 
 on:
   schedule:
-    # Runs every 25 minutes to prevent the 48-hour timeout
-    - cron: '*/25 * * * *'
+    # Runs every 4 hours
+    - cron: '0 */4 * * *'
   workflow_dispatch:
 
 jobs:
